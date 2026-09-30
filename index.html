@@ -1,1 +1,226 @@
-<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Đăng ký Hội nghị TGPL</title><style>body{font-family:Arial;margin:20px;background:#f4f6f9}input,textarea,select{width:100%;padding:8px;margin:4px 0}button{padding:10px 15px;background:#0b65c2;color:#fff;border:none;border-radius:4px}table{width:100%;border-collapse:collapse;background:#fff}th,td{border:1px solid #ddd;padding:8px} .card{background:#fff;padding:15px;border-radius:8px;margin-bottom:15px}</style></head><body><h2>Phần mềm Đăng ký Hội nghị Trợ giúp pháp lý</h2><div class="card"><h3>Tạo đăng ký</h3><input id="donvi" placeholder="Đơn vị"><input id="chude" placeholder="Chủ đề"><input id="thoigian" type="date"><input id="diadiem" placeholder="Địa điểm"><select id="trangthai"><option>Mới đăng ký</option><option>Đang xem xét</option><option>Đã phê duyệt</option><option>Đã hoàn thành</option></select><button onclick="save()">Lưu</button></div><div class="card"><h3>Danh sách</h3><table><thead><tr><th>Đơn vị</th><th>Chủ đề</th><th>Thời gian</th><th>Địa điểm</th><th>Trạng thái</th></tr></thead><tbody id="tb"></tbody></table></div><script>function load(){let d=JSON.parse(localStorage.getItem('hn')||'[]');tb.innerHTML=d.map(x=>`<tr><td>${x.donvi}</td><td>${x.chude}</td><td>${x.tg}</td><td>${x.dd}</td><td>${x.tt}</td></tr>`).join('')}function save(){let d=JSON.parse(localStorage.getItem('hn')||'[]');d.push({donvi:donvi.value,chude:chude.value,tg:thoigian.value,dd:diadiem.value,tt:trangthai.value});localStorage.setItem('hn',JSON.stringify(d));load();alert('Đã lưu');}load();</script></body></html><!-- rebuild -->
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<title>Hệ thống Quản lý Hội nghị Trợ giúp pháp lý</title>
+
+<link href="https://.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css
+<script src.jsdelivr.net/npm/chart.jsscript>
+
+<style>
+body{
+    background:#f4f6f9;
+}
+
+.sidebar{
+    width:250px;
+    min-height:100vh;
+    background:#0d6efd;
+    color:white;
+    position:fixed;
+}
+
+.sidebar h4{
+    padding:20px;
+}
+
+.sidebar a{
+    display:block;
+    padding:12px 20px;
+    color:white;
+    text-decoration:none;
+}
+
+.sidebar a:hover{
+    background:rgba(255,255,255,0.15);
+}
+
+.content{
+    margin-left:250px;
+    padding:20px;
+}
+
+.card-stat{
+    border:none;
+    border-radius:12px;
+    color:white;
+}
+
+.stat-primary{
+    background:#0d6efd;
+}
+
+.stat-success{
+    background:#198754;
+}
+
+.stat-warning{
+    background:#ffc107;
+    color:black;
+}
+
+.stat-danger{
+    background:#dc3545;
+}
+</style>
+</head>
+
+<body>
+
+<div class="sidebar">
+
+    <h4>⚖️ TGPL Đồng Nai</h4>
+
+    <aashboard📊 Dashboard</a>
+
+    <a href="#register">📝 Đăngị</a>
+
+    <aist📋 Danh sách hội nghị</a>
+
+</div>
+
+<div class="content">
+
+    <div class="mb-4">
+        <h2>HỆ THỐNG QUẢN LÝ HỘI NGHỊ TRỢ GIÚP PHÁP LÝ</h2>
+        <p class="text-muted">
+            Trung tâm Trợ giúp pháp lý Nhà nước
+        </p>
+    </div>
+
+    <!-- DASHBOARD -->
+
+    <div id="dashboard">
+
+        <div class="row mb-4">
+
+            <div class="col-md-3">
+                <div class="card card-stat stat-primary">
+                    <div class="card-body">
+                        <h3 id="total">0</h3>
+                        <div>Tổng hồ sơ</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <div class="card card-stat stat-warning">
+                    <div class="card-body">
+                        <h3 id="newCount">0</h3>
+                        <div>Mới đăng ký</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <div class="card card-stat stat-success">
+                    <div class="card-body">
+                        <h3 id="approvedCount">0</h3>
+                        <div>Đã phê duyệt</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <div class="card card-stat stat-danger">
+                    <div class="card-body">
+                        <h3 id="completedCount">0</h3>
+                        <div>Hoàn thành</div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header">
+                Thống kê trạng thái hồ sơ
+            </div>
+
+            <div class="card-body">
+                <canvas id="statusChart"></canvas>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- FORM -->
+
+    <div id="register" class="card mb-4">
+
+        <div class="card-header">
+            Đăng ký hội nghị
+        </div>
+
+        <div class="card-body">
+
+            <div class="row">
+
+                <div class="col-md-6">
+                    <label>Tên đơn vị</label>
+                    <input id="organization"
+                           class="form-control">
+                </div>
+
+                <div class="col-md-6">
+                    <label>Người liên hệ</label>
+                    <input id="contact"
+                           class="form-control">
+                </div>
+
+                <div class="col-md-6 mt-3">
+                    <label>Chủ đề hội nghị</label>
+                    <input id="topic"
+                           class="form-control">
+                </div>
+
+                <div class="col-md-6 mt-3">
+                    <label>Lĩnh vực pháp luật</label>
+
+                    <select id="legalArea"
+                            class="form-select">
+
+                        <option>Đất đai</option>
+                        <option>Hôn nhân gia đình</option>
+                        <option>Dân sự</option>
+                        <option>Hình sự</option>
+                        <option>Trợ giúp pháp lý</option>
+
+                    </select>
+
+                </div>
+
+                <div class="col-md-4 mt-3">
+                    <label>Số lượng dự kiến</label>
+                    <input id="participants"
+                           type="number"
+                           class="form-control">
+                </div>
+
+                <div class="col-md-4 mt-3">
+                    <label>Ngày tổ chức</label>
+                    <input id="date"
+                           type="date"
+                           class="form-control">
+                </div>
+
+                <div class="col-md-4 mt-3">
+                    <label>Trạng thái</label>
+
+                    <select id="status"
+                            class="form-select">
+
+                        <option>Mới đăng ký</option>
+                        <option>Đã phê duyệt</option>
+                        <option>Hoàn thành</option>
+
+                    </select>
+
+                </div>
+
+                <div class="col-md-12 mt-3">
+                    <label>Địa điểm</label>
+                    <input id="location"
+            
