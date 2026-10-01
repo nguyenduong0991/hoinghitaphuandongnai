@@ -1,305 +1,185 @@
-const STORAGE_KEY = "conferenceList";
-const DRAFT_KEY = "conferenceDraft";
+// ======================================================
+// LẤY DỮ LIỆU HỘI NGHỊ
+// ======================================================
 
-/* ===========================
-   STORAGE
-=========================== */
+// Lấy dữ liệu từ LocalStorage
+const data = JSON.parse(
+    localStorage.getItem("conferenceList") || "[]"
+);
 
-const StorageService = {
 
-    getConferences() {
-        return JSON.parse(
-            localStorage.getItem(STORAGE_KEY) || "[]"
-        );
-    },
+// ======================================================
+// ĐẾM TRẠNG THÁI
+// ======================================================
 
-    saveConferences(data) {
-        localStorage.setItem(
-            STORAGE_KEY,
-            JSON.stringify(data)
-        );
-    },
+// Tổng số hồ sơ
+const total = data.length;
 
-    getDraft() {
-        return JSON.parse(
-            localStorage.getItem(DRAFT_KEY) || "{}"
-        );
-    },
 
-    saveDraft(data) {
-        localStorage.setItem(
-            DRAFT_KEY,
-            JSON.stringify(data)
-        );
-    },
+// Chờ phê duyệt
+const pending = data.filter(
+    item => item.status === "Chờ phê duyệt"
+).length;
 
-    clearDraft() {
-        localStorage.removeItem(DRAFT_KEY);
-    }
 
-};
+// Đã phê duyệt
+const approved = data.filter(
+    item => item.status === "Đã phê duyệt"
+).length;
 
-/* ===========================
-   APP
-=========================== */
 
-const App = {
+// Hoàn thành
+const completed = data.filter(
+    item => item.status === "Hoàn thành"
+).length;
 
-    generateCode() {
 
-        const now = new Date();
+// ======================================================
+// HIỂN THỊ KPI
+// ======================================================
 
-        return "HN-" +
-            now.getFullYear() +
-            String(now.getMonth() + 1)
-            .padStart(2, "0") +
-            String(now.getDate())
-            .padStart(2, "0") +
-            "-" +
-            now.getTime();
-    }
+document.getElementById("totalConference").innerText = total;
 
-};
+document.getElementById("pendingConference").innerText = pending;
 
-/* ===========================
-   CONFERENCE SERVICE
-=========================== */
+document.getElementById("approvedConference").innerText = approved;
 
-const ConferenceService = {
+document.getElementById("completedConference").innerText = completed;
 
-    getAll() {
 
-        return StorageService
-            .getConferences();
+// ======================================================
+// BIỂU ĐỒ
+// ======================================================
 
-    },
+const chartElement = document.getElementById("statusChart");
 
-    getById(id) {
+if (chartElement) {
 
-        return this
-            .getAll()
-            .find(x => x.id == id);
+    new Chart(chartElement, {
 
-    },
+        type: "pie",
 
-    create(data) {
+        data: {
 
-        const conferences =
-            this.getAll();
-
-        conferences.push({
-
-            id: Date.now(),
-
-            code:
-                App.generateCode(),
-
-            organization:
-                data.organization,
-
-            topic:
-                data.topic,
-
-            legalArea:
-                data.legalArea,
-
-            participants:
-                data.participants,
-
-            date:
-                data.date,
-
-            status:
+            labels: [
                 "Chờ phê duyệt",
-
-            createdDate:
-                new Date()
-                .toISOString()
-
-        });
-
-        StorageService
-            .saveConferences(conferences);
-
-    },
-
-    update(id, data) {
-
-        const conferences =
-            this.getAll();
-
-        const item =
-            conferences.find(
-                x => x.id == id
-            );
-
-        if (!item)
-            return;
-
-        Object.assign(
-            item,
-            data
-        );
-
-        StorageService
-            .saveConferences(conferences);
-
-    },
-
-    delete(id) {
-
-        let conferences =
-            this.getAll();
-
-        conferences =
-            conferences.filter(
-                x => x.id != id
-            );
-
-        StorageService
-            .saveConferences(conferences);
-
-    }
-
-};
-
-/* ===========================
-   WORKFLOW
-=========================== */
-
-const Workflow = {
-
-    approve(id) {
-
-        ConferenceService.update(
-            id,
-            {
-                status:
-                "Đã phê duyệt"
-            }
-        );
-
-    },
-
-    needMoreInfo(id) {
-
-        ConferenceService.update(
-            id,
-            {
-                status:
-                "Cần bổ sung"
-            }
-        );
-
-    },
-
-    complete(id) {
-
-        ConferenceService.update(
-            id,
-            {
-                status:
+                "Đã phê duyệt",
                 "Hoàn thành"
+            ],
+
+            datasets: [
+                {
+                    data: [
+                        pending,
+                        approved,
+                        completed
+                    ]
+                }
+            ]
+
+        },
+
+        options: {
+
+            responsive: true,
+
+            plugins: {
+
+                legend: {
+                    position: "bottom"
+                }
+
             }
-        );
+
+        }
+
+    });
+
+}
+
+
+// ======================================================
+// DANH SÁCH HỒ SƠ GẦN ĐÂY
+// ======================================================
+
+const recentTable =
+    document.getElementById("recentTable");
+
+
+if (recentTable) {
+
+    let html = "";
+
+
+    // Lấy 10 hồ sơ mới nhất
+    const recentData = data
+        .slice()
+        .reverse()
+        .slice(0, 10);
+
+
+    // Nếu chưa có dữ liệu
+    if (recentData.length === 0) {
+
+        html = `
+            <tr>
+                <td colspan="4" class="text-center text-muted">
+                    Chưa có hồ sơ
+                </td>
+            </tr>
+        `;
 
     }
 
-};
 
-/* ===========================
-   KPI
-=========================== */
+    // Nếu có dữ liệu
+    else {
 
-const DashboardService = {
+        recentData.forEach(item => {
 
-    getKpi() {
+            html += `
+                <tr>
 
-        const data =
-            ConferenceService
-            .getAll();
+                    <td>
+                        ${escapeHtml(item.code || "")}
+                    </td>
 
-        return {
+                    <td>
+                        ${escapeHtml(item.topic || "")}
+                    </td>
 
-            total:
-                data.length,
+                    <td>
+                        ${escapeHtml(item.organization || "")}
+                    </td>
 
-            pending:
-                data.filter(
-                    x => x.status ===
-                    "Chờ phê duyệt"
-                ).length,
+                    <td>
+                        ${escapeHtml(item.status || "")}
+                    </td>
 
-            approved:
-                data.filter(
-                    x => x.status ===
-                    "Đã phê duyệt"
-                ).length,
-
-            completed:
-                data.filter(
-                    x => x.status ===
-                    "Hoàn thành"
-                ).length
-
-        };
-
-    }
-
-};
-
-/* ===========================
-   DEMO DATA
-=========================== */
-
-function seedDemoData() {
-
-    const list = [];
-
-    for (let i = 1; i <= 20; i++) {
-
-        list.push({
-
-            id: i,
-
-            code:
-                "HN-2026-" + i,
-
-            organization:
-                "UBND Phường Tam Hiệp",
-
-            topic:
-                "Tuyên truyền pháp luật " + i,
-
-            legalArea:
-                "Đất đai",
-
-            participants:
-                200,
-
-            date:
-                "2026-10-15",
-
-            status:
-                [
-                    "Chờ phê duyệt",
-                    "Đã phê duyệt",
-                    "Hoàn thành"
-                ][Math.floor(Math.random()*3)],
-
-            createdDate:
-                new Date()
-                .toISOString()
+                </tr>
+            `;
 
         });
 
     }
 
-    StorageService
-        .saveConferences(list);
 
-    console.log(
-        "Đã tạo 20 hồ sơ mẫu"
-    );
+    recentTable.innerHTML = html;
+
+}
+
+
+// ======================================================
+// HÀM BẢO VỆ HTML
+// ======================================================
+
+function escapeHtml(value) {
+
+    return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
 
 }
