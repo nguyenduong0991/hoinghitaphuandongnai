@@ -174,6 +174,7 @@ async function setupAdminUser(username, full_name, password, bootstrapToken = ""
 }
 async function getCurrentUser() { return apiRequest("/auth/me"); }
 async function getUsers() { return apiRequest("/users"); }
+async function getDirectory() { return apiRequest("/directory"); }
 async function createUser(user) { return apiRequest("/users", { method: "POST", body: JSON.stringify(user) }); }
 async function updateUser(id, user) {
     return apiRequest(`/users/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(user) });

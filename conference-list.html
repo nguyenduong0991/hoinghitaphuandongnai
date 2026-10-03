@@ -33,7 +33,7 @@
                 class="btn btn-light btn-sm">
                 Dashboard
             </a>
-            <a href="organizations.html" class="btn btn-outline-light btn-sm ms-2">Quản lý đơn vị</a>
+            <a href="organizations.html" class="btn btn-outline-light btn-sm ms-2 admin-only">Quản lý đơn vị</a>
 
         </div>
     </nav>
@@ -47,7 +47,7 @@
             <div>
                 <h3>Danh sách hội nghị</h3>
 
-                <p class="text-muted mb-0">
+                <p id="conferenceScopeNote" class="text-muted mb-0">
                     Quản lý các hội nghị đã đăng ký trên hệ thống
                 </p>
             </div>
@@ -179,7 +179,7 @@
 
                 <div class="d-flex align-items-center gap-2">
                     Danh sách hội nghị
-                    <a href="organizations.html" class="btn btn-sm btn-outline-primary">Đơn vị</a>
+                    <a href="organizations.html" class="btn btn-sm btn-outline-primary admin-only">Đơn vị</a>
                     <button id="exportCsv" type="button" class="btn btn-sm btn-outline-success">Xuất CSV</button>
                 </div>
 
@@ -257,7 +257,7 @@
     <!-- JAVASCRIPT -->
 
     <script src="assets/js/config.js?v=20261003-analytics-1"></script>
-    <script src="assets/js/api.js?v=20261003-reschedule-1"></script>
+    <script src="assets/js/api.js?v=20261003-unit-scope-1"></script>
     <script src="assets/js/attachments.js?v=20261003-3"></script>
     <script src="assets/js/auth.js"></script>
 

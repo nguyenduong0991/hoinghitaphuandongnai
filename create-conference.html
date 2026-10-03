@@ -36,7 +36,7 @@
                 Dashboard
 
             </a>
-            <a href="organizations.html" class="btn btn-outline-light btn-sm ms-2">Quản lý đơn vị</a>
+            <a href="organizations.html" class="btn btn-outline-light btn-sm ms-2 admin-only">Quản lý đơn vị</a>
 
         </div>
 
@@ -122,7 +122,7 @@
                         <select id="organization_id" name="organization_id" class="form-select" hidden disabled>
                             <option value="">Đang tải danh sách đơn vị...</option>
                         </select>
-                        <a href="organizations.html" id="manageOrganizationsLink" class="form-text d-inline-block" hidden>Quản lý / thêm đơn vị</a>
+                        <a href="organizations.html" id="manageOrganizationsLink" class="form-text d-inline-block admin-only" hidden>Quản lý / thêm đơn vị</a>
 
                     </div>
 
@@ -280,7 +280,7 @@
 
     <!-- API -->
     <script src="assets/js/config.js?v=20261003-analytics-1"></script>
-    <script src="assets/js/api.js?v=20261003-reschedule-1"></script>
+    <script src="assets/js/api.js?v=20261003-unit-scope-1"></script>
     <script src="assets/js/attachments.js?v=20261003-3"></script>
     <script src="assets/js/auth.js"></script>
 
@@ -327,6 +327,7 @@
                     option.textContent = organization.name;
                     organizationSelect.appendChild(option);
                 });
+                if (organizations.length === 1) organizationSelect.value = organizations[0].id;
                 if (!organizations.length) {
                     showError("Chưa có đơn vị. Hãy thêm đơn vị trước khi đăng ký.");
                 }

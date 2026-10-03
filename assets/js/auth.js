@@ -20,8 +20,13 @@
         controls.className = sidebar ? "px-3 py-2 mt-3 border-top" : "ms-auto d-flex align-items-center gap-2";
         const name = document.createElement("span");
         name.className = sidebar ? "d-block small text-muted mb-2" : "small text-white";
-        name.textContent = `${user.full_name || user.username} · ${user.role}`;
+        name.textContent = `${user.full_name || user.username} · ${user.organization_name || user.role}`;
         controls.appendChild(name);
+        const directoryLink = document.createElement("a");
+        directoryLink.href = "directory.html";
+        directoryLink.className = sidebar ? "d-block mb-2" : "btn btn-sm btn-outline-light";
+        directoryLink.textContent = "Danh bạ cán bộ";
+        controls.appendChild(directoryLink);
         const analyticsLink = document.createElement("a");
         analyticsLink.href = "analytics.html";
         analyticsLink.className = sidebar ? "d-block mb-2" : "btn btn-sm btn-outline-light";
@@ -66,12 +71,16 @@
             localStorage.setItem("tgpl.user", JSON.stringify(user));
             window.tgplCurrentUser = user;
             addAccountControls(user);
+            const scopeNote = document.getElementById("conferenceScopeNote");
+            if (scopeNote) scopeNote.textContent = user.role === "ADMIN"
+                ? "Quản trị viên đang xem hồ sơ của toàn hệ thống."
+                : `Danh sách và tiến độ chỉ hiển thị hội nghị của ${user.organization_name || "đơn vị được gán cho tài khoản"}.`;
             if (user.role !== "ADMIN") {
                 document.querySelectorAll(".admin-only").forEach(element => {
                     element.hidden = true;
                     element.style.display = "none";
                 });
-                if (location.pathname.endsWith("users.html")) location.replace("index.html");
+                if (location.pathname.endsWith("users.html") || location.pathname.endsWith("organizations.html")) location.replace("index.html");
             }
         } catch (error) {
             if (!location.pathname.endsWith("login.html")) redirectToLogin();

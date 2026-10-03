@@ -19,16 +19,15 @@ document.addEventListener("DOMContentLoaded", async function () {
 
 async function loadDashboard() {
     try {
-        const result = await getConferences();
-
-        console.log("Dữ liệu hội nghị:", result);
-
+        const [result, statsResult] = await Promise.all([getConferences(), getConferenceStatistics()]);
         const conferences = result.data || [];
+        const statistics = statsResult.data || {};
 
-        updateStatistics(conferences);
+        updateStatistics(statistics);
         updateRecentConferences(conferences);
-        updateStatusChart(conferences);
-        updateDashboardReport(conferences);
+        updateStatusChart(statistics.by_status || {});
+        updateDashboardReport(statistics);
+        updateTrendChart(statistics.by_month || [], new Date());
 
     } catch (error) {
         console.error("Lỗi tải dữ liệu Dashboard:", error);
@@ -41,25 +40,14 @@ async function loadDashboard() {
 // THỐNG KÊ
 // ======================================================
 
-function updateStatistics(conferences) {
-
-    const total = conferences.length;
-
-    const pending =
-        conferences.filter(item => item.status === "PENDING").length;
-
-    const approved =
-        conferences.filter(item => item.status === "APPROVED").length;
-
-    const completed =
-        conferences.filter(item => item.status === "COMPLETED").length;
-
-    const rejected =
-        conferences.filter(item => item.status === "REJECTED").length;
-
-    const cancelled =
-        conferences.filter(item => item.status === "CANCELLED").length;
-
+function updateStatistics(statistics) {
+    const counts = statistics.by_status || {};
+    const total = Number(statistics.total || 0);
+    const pending = Number(counts.PENDING || 0);
+    const approved = Number(counts.APPROVED || 0);
+    const completed = Number(counts.COMPLETED || 0);
+    const rejected = Number(counts.REJECTED || 0);
+    const cancelled = Number(counts.CANCELLED || 0);
 
     setElementText("totalConferences", total);
     setElementText("pendingConferences", pending);
@@ -86,40 +74,28 @@ function updateStatistics(conferences) {
     });
 }
 
-function updateDashboardReport(conferences) {
+function updateDashboardReport(statistics) {
     const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const currentStart = new Date(today);
-    currentStart.setDate(currentStart.getDate() - 29);
-    const previousStart = new Date(currentStart);
-    previousStart.setDate(previousStart.getDate() - 30);
-    const periodRecords = (start, end) => conferences.filter(item => {
-        const createdAt = new Date(item.created_at || item.createdAt || item.start_time || 0);
-        return !Number.isNaN(createdAt.getTime()) && createdAt >= start && createdAt < end;
-    });
-    const currentEnd = new Date(today);
-    currentEnd.setDate(currentEnd.getDate() + 1);
-    const current = periodRecords(currentStart, currentEnd);
-    const previous = periodRecords(previousStart, currentStart);
-    const countStatus = (records, status) => records.filter(item => item.status === status).length;
-    const sumParticipants = records => records.reduce((sum, item) => sum + (Number(item.expected_participants) || 0), 0);
-
-    setElementText("reportPeriod", `${formatDateOnly(currentStart)} – ${formatDateOnly(now)} · so với 30 ngày liền trước`);
+    const comparison = statistics.period_comparison || { current: {}, previous: {} };
+    const current = comparison.current || {};
+    const previous = comparison.previous || {};
+    const counts = statistics.by_status || {};
+    const expectedTotal = (statistics.by_month || []).reduce((sum, row) => sum + Number(row.expected_participants || 0), 0);
+    const rangeStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29);
+    setElementText("reportPeriod", `${formatDateOnly(rangeStart)} – ${formatDateOnly(now)} · so với 30 ngày liền trước`);
     setElementText("reportUpdated", `Cập nhật lúc ${now.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}`);
-    setElementText("periodRegistered", current.length.toLocaleString("vi-VN"));
-    setElementText("periodApproved", countStatus(current, "APPROVED").toLocaleString("vi-VN"));
-    setElementText("periodCompleted", countStatus(current, "COMPLETED").toLocaleString("vi-VN"));
-    setElementText("periodParticipants", sumParticipants(current).toLocaleString("vi-VN"));
-    setElementText("registeredTotal", `Toàn hệ thống: ${conferences.length.toLocaleString("vi-VN")} hội nghị`);
-    setElementText("approvedTotal", `Toàn hệ thống: ${countStatus(conferences, "APPROVED").toLocaleString("vi-VN")} hội nghị`);
-    setElementText("completedTotal", `Toàn hệ thống: ${countStatus(conferences, "COMPLETED").toLocaleString("vi-VN")} hội nghị`);
-    setElementText("participantsTotal", `Toàn hệ thống: ${sumParticipants(conferences).toLocaleString("vi-VN")} lượt dự kiến`);
-
-    renderPeriodChange("registeredChange", current.length, previous.length);
-    renderPeriodChange("approvedChange", countStatus(current, "APPROVED"), countStatus(previous, "APPROVED"));
-    renderPeriodChange("completedChange", countStatus(current, "COMPLETED"), countStatus(previous, "COMPLETED"));
-    renderPeriodChange("participantsChange", sumParticipants(current), sumParticipants(previous));
-    updateTrendChart(conferences, now);
+    setElementText("periodRegistered", Number(current.registered || 0).toLocaleString("vi-VN"));
+    setElementText("periodApproved", Number(current.approved || 0).toLocaleString("vi-VN"));
+    setElementText("periodCompleted", Number(current.completed || 0).toLocaleString("vi-VN"));
+    setElementText("periodParticipants", Number(current.participants || 0).toLocaleString("vi-VN"));
+    setElementText("registeredTotal", `Toàn hệ thống: ${Number(statistics.total || 0).toLocaleString("vi-VN")} hội nghị`);
+    setElementText("approvedTotal", `Toàn hệ thống: ${Number(counts.APPROVED || 0).toLocaleString("vi-VN")} hội nghị`);
+    setElementText("completedTotal", `Toàn hệ thống: ${Number(counts.COMPLETED || 0).toLocaleString("vi-VN")} hội nghị`);
+    setElementText("participantsTotal", `Toàn hệ thống: ${expectedTotal.toLocaleString("vi-VN")} lượt dự kiến`);
+    renderPeriodChange("registeredChange", Number(current.registered || 0), Number(previous.registered || 0));
+    renderPeriodChange("approvedChange", Number(current.approved || 0), Number(previous.approved || 0));
+    renderPeriodChange("completedChange", Number(current.completed || 0), Number(previous.completed || 0));
+    renderPeriodChange("participantsChange", Number(current.participants || 0), Number(previous.participants || 0));
 }
 
 function formatDateOnly(value) {
@@ -144,23 +120,17 @@ function renderPeriodChange(id, current, previous) {
     element.innerHTML = `<i class="bi ${icon}"></i> ${change > 0 ? "+" : ""}${change.toLocaleString("vi-VN", { maximumFractionDigits: 1 })}% · kỳ trước ${previous.toLocaleString("vi-VN")}`;
 }
 
-function updateTrendChart(conferences, now) {
+function updateTrendChart(monthRows, now) {
     const canvas = document.getElementById("trendChart");
     if (!canvas || typeof Chart === "undefined") return;
     if (window.conferenceTrendChart) window.conferenceTrendChart.destroy();
-    const months = [];
-    for (let offset = 5; offset >= 0; offset--) {
-        months.push(new Date(now.getFullYear(), now.getMonth() - offset, 1));
-    }
-    const labels = months.map(month => month.toLocaleDateString("vi-VN", { month: "short", year: "2-digit" }));
-    const registered = months.map(month => conferences.filter(item => {
-        const date = new Date(item.created_at || item.createdAt || item.start_time || 0);
-        return date.getFullYear() === month.getFullYear() && date.getMonth() === month.getMonth();
-    }).length);
-    const completed = months.map(month => conferences.filter(item => {
-        const date = new Date(item.created_at || item.createdAt || item.start_time || 0);
-        return item.status === "COMPLETED" && date.getFullYear() === month.getFullYear() && date.getMonth() === month.getMonth();
-    }).length);
+    const months = monthRows.slice(-6);
+    const labels = months.map(row => {
+        const [year, month] = String(row.month).split("-").map(Number);
+        return new Date(year, month - 1, 1).toLocaleDateString("vi-VN", { month: "short", year: "2-digit" });
+    });
+    const registered = months.map(row => Number(row.count || 0));
+    const completed = months.map(row => Number(row.completed_count || 0));
     window.conferenceTrendChart = new Chart(canvas, {
         type: "line",
         data: { labels, datasets: [
@@ -171,7 +141,7 @@ function updateTrendChart(conferences, now) {
     });
 }
 
-function updateStatusChart(conferences) {
+function updateStatusChart(statusCounts) {
     const canvas = document.getElementById("statusChart");
     if (!canvas || typeof Chart === "undefined") return;
     if (window.conferenceStatusChart) window.conferenceStatusChart.destroy();
@@ -184,7 +154,7 @@ function updateStatusChart(conferences) {
         data: {
             labels,
             datasets: [{
-                data: statuses.map(status => conferences.filter(item => item.status === status).length),
+                data: statuses.map(status => Number(statusCounts[status] || 0)),
                 backgroundColor: colors,
                 borderWidth: 0
             }]

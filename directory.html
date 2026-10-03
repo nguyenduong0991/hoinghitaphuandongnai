@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Danh bạ cán bộ - TGPL Đồng Nai</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="assets/css/style.css?v=20261003-unit-scope-1">
+</head>
+<body>
+    <nav class="navbar navbar-dark bg-primary">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="index.html">Hệ thống Hội nghị TGPL</a>
+            <div class="d-flex gap-2"><a href="conference-list.html" class="btn btn-light btn-sm">Hội nghị của đơn vị</a><a href="index.html" class="btn btn-outline-light btn-sm">Dashboard</a></div>
+        </div>
+    </nav>
+    <main class="container py-4">
+        <div class="mb-4">
+            <h2 class="mb-1">Danh bạ cán bộ các xã/phường/đơn vị</h2>
+            <p class="text-muted mb-0">Tra cứu tên cán bộ và đơn vị để phối hợp, liên hệ. Danh bạ không hiển thị hồ sơ hội nghị của các đơn vị khác.</p>
+        </div>
+        <div id="directoryMessage" class="alert" hidden role="status"></div>
+        <section class="card">
+            <div class="card-body">
+                <label for="directorySearch" class="form-label">Tìm theo cán bộ, đơn vị, email hoặc số điện thoại</label>
+                <input id="directorySearch" class="form-control mb-3" type="search" placeholder="Nhập từ khóa">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light"><tr><th>Cán bộ</th><th>Xã/phường/đơn vị</th><th>Email</th><th>Điện thoại</th></tr></thead>
+                        <tbody id="directoryRows"><tr><td colspan="4" class="text-muted">Đang tải danh bạ…</td></tr></tbody>
+                    </table>
+                </div>
+                <small id="directoryCount" class="text-muted"></small>
+            </div>
+        </section>
+    </main>
+    <script src="assets/js/config.js?v=20261003-analytics-1"></script>
+    <script src="assets/js/api.js?v=20261003-directory-1"></script>
+    <script src="assets/js/auth.js"></script>
+    <script>
+        let officers = [];
+        const rows = document.getElementById("directoryRows");
+        const search = document.getElementById("directorySearch");
+        const message = document.getElementById("directoryMessage");
+
+        function renderDirectory() {
+            const term = search.value.trim().toLocaleLowerCase("vi-VN");
+            const filtered = officers.filter(person => [person.full_name, person.organization_name, person.email, person.phone]
+                .some(value => String(value || "").toLocaleLowerCase("vi-VN").includes(term)));
+            rows.replaceChildren();
+            if (!filtered.length) {
+                const row = rows.insertRow(); const cell = row.insertCell();
+                cell.colSpan = 4; cell.className = "text-muted"; cell.textContent = "Không tìm thấy cán bộ phù hợp.";
+            }
+            filtered.forEach(person => {
+                const row = rows.insertRow();
+                row.insertCell().textContent = person.full_name || "—";
+                row.insertCell().textContent = person.organization_name || "—";
+                const emailCell = row.insertCell();
+                if (person.email) { const link = document.createElement("a"); link.href = `mailto:${person.email}`; link.textContent = person.email; emailCell.appendChild(link); }
+                else emailCell.textContent = "—";
+                const phoneCell = row.insertCell();
+                if (person.phone) { const link = document.createElement("a"); link.href = `tel:${person.phone.replace(/[^+\d]/g, "")}`; link.textContent = person.phone; phoneCell.appendChild(link); }
+                else phoneCell.textContent = "—";
+            });
+            document.getElementById("directoryCount").textContent = `Hiển thị ${filtered.length} cán bộ`;
+        }
+
+        async function loadDirectory() {
+            try {
+                const result = await getDirectory();
+                officers = result.data || [];
+                renderDirectory();
+            } catch (error) {
+                message.className = "alert alert-danger";
+                message.textContent = error.message || "Không tải được danh bạ cán bộ.";
+                message.hidden = false;
+                rows.replaceChildren();
+            }
+        }
+        search.addEventListener("input", renderDirectory);
+        loadDirectory();
+    </script>
+</body>
+</html>
