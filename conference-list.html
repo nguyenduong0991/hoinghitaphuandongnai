@@ -33,6 +33,7 @@
                 class="btn btn-light btn-sm">
                 Dashboard
             </a>
+            <a href="organizations.html" class="btn btn-outline-light btn-sm ms-2">Quản lý đơn vị</a>
 
         </div>
     </nav>
@@ -173,9 +174,11 @@
 
             <div class="card-header d-flex justify-content-between">
 
-                <span>
+                <div class="d-flex align-items-center gap-2">
                     Danh sách hội nghị
-                </span>
+                    <a href="organizations.html" class="btn btn-sm btn-outline-primary">Đơn vị</a>
+                    <button id="exportCsv" type="button" class="btn btn-sm btn-outline-success">Xuất CSV</button>
+                </div>
 
                 <span
                     id="conferenceCount"
@@ -253,11 +256,13 @@
     <script src="assets/js/config.js"></script>
     <script src="assets/js/api.js"></script>
     <script src="assets/js/attachments.js"></script>
+    <script src="assets/js/auth.js"></script>
 
 
     <script>
 
         let allConferences = [];
+        let visibleConferences = [];
 
 
         // ==================================================
@@ -342,6 +347,7 @@
 
 
             tableBody.innerHTML = "";
+            visibleConferences = [...conferences];
 
 
             if (countElement) {
@@ -486,20 +492,123 @@
                 body.innerHTML = `
                     <div class="row g-3">
                         <div class="col-md-6"><small class="text-muted">Mã hội nghị</small><div class="fw-semibold">${escapeHtml(item.code || "")}</div></div>
-                        <div class="col-md-6"><small class="text-muted">Trạng thái</small><div>${getStatusBadge(item.status)}</div></div>
+                        <div class="col-md-6"><small class="text-muted">Trạng thái</small><div id="detailStatusBadge">${getStatusBadge(item.status)}</div></div>
                         <div class="col-md-12"><small class="text-muted">Chủ đề</small><div class="fw-semibold">${escapeHtml(item.title || "")}</div></div>
                         <div class="col-md-6"><small class="text-muted">Đơn vị đăng ký</small><div>${escapeHtml(item.organization_name || "")}</div></div>
                         <div class="col-md-6"><small class="text-muted">Địa điểm</small><div>${escapeHtml(item.location_name || item.location_address || "Chưa cập nhật")}</div></div>
                         <div class="col-md-6"><small class="text-muted">Bắt đầu</small><div>${escapeHtml(formatDateTime(item.start_time))}</div></div>
                         <div class="col-md-6"><small class="text-muted">Kết thúc</small><div>${escapeHtml(formatDateTime(item.end_time))}</div></div>
+                        <div class="col-md-6"><small class="text-muted">Lý do từ chối / hủy</small><div>${escapeHtml(item.rejection_reason || item.cancel_reason || "—")}</div></div>
                         <div class="col-md-6"><small class="text-muted">Số người dự kiến</small><div>${escapeHtml(item.expected_participants ?? 0)}</div></div>
                         <div class="col-12"><small class="text-muted">Nội dung / mục đích</small><div>${escapeHtml(item.description || "Chưa cập nhật")}</div></div>
                         <div class="col-12"><small class="text-muted">Tệp đính kèm</small><div id="conferenceAttachments" class="mt-2"><span class="text-muted">Đang tải danh sách tệp...</span></div></div>
+                        <div class="col-12"><small class="text-muted">Lịch sử xử lý</small><div id="statusHistory" class="mt-2"><span class="text-muted">Đang tải...</span></div></div>
+                        <div class="col-12 border-top pt-3 d-flex flex-wrap align-items-end gap-2 admin-only">
+                            <div><label for="statusEdit" class="form-label mb-1">Cập nhật trạng thái</label><select id="statusEdit" class="form-select">
+                                <option value="PENDING">Chờ phê duyệt</option><option value="APPROVED">Đã phê duyệt</option><option value="COMPLETED">Hoàn thành</option><option value="REJECTED">Từ chối</option><option value="CANCELLED">Đã hủy</option>
+                            </select></div>
+                            <button id="saveStatus" type="button" class="btn btn-primary">Lưu trạng thái</button>
+                            <button id="deleteConference" type="button" class="btn btn-outline-danger ms-auto">Xóa hội nghị</button>
+                            <span id="detailActionMessage" class="small" role="status"></span>
+                        </div>
                     </div>`;
+                document.getElementById("statusEdit").value = item.status || "PENDING";
+                document.getElementById("saveStatus").addEventListener("click", () => saveConferenceStatus(item.id));
+                document.getElementById("deleteConference").addEventListener("click", () => removeConference(item.id));
                 renderConferenceAttachments(item.id);
+                renderStatusHistory(item.id);
             } catch (error) {
                 body.innerHTML = `<div class="alert alert-danger mb-0">${escapeHtml(error.message || "Không tải được chi tiết hội nghị.")}</div>`;
             }
+        }
+
+        async function saveConferenceStatus(id) {
+            const button = document.getElementById("saveStatus");
+            const message = document.getElementById("detailActionMessage");
+            button.disabled = true;
+            try {
+                const status = document.getElementById("statusEdit").value;
+                let reason = "";
+                if (["REJECTED", "CANCELLED"].includes(status)) {
+                    reason = window.prompt(status === "REJECTED" ? "Nhập lý do từ chối hồ sơ:" : "Nhập lý do hủy hội nghị:") || "";
+                    if (!reason.trim()) throw new Error("Cần nhập lý do để từ chối hoặc hủy.");
+                }
+                const result = await updateConferenceStatus(id, status, reason);
+                document.getElementById("detailStatusBadge").innerHTML = getStatusBadge(result.data?.status || document.getElementById("statusEdit").value);
+                message.className = "small text-success";
+                message.textContent = "Đã cập nhật trạng thái.";
+                renderStatusHistory(id);
+                await reloadConferences();
+            } catch (error) {
+                message.className = "small text-danger";
+                message.textContent = error.message || "Không cập nhật được trạng thái.";
+            } finally {
+                button.disabled = false;
+            }
+        }
+
+        async function renderStatusHistory(id) {
+            try {
+                const result = await getConferenceStatusHistory(id);
+                const history = result.data || [];
+                const panel = document.getElementById("statusHistory");
+                if (!panel) return;
+                panel.replaceChildren();
+                if (!history.length) {
+                    panel.textContent = "Chưa có lịch sử phê duyệt.";
+                    return;
+                }
+                const list = document.createElement("ul");
+                list.className = "list-group list-group-flush";
+                history.forEach(entry => {
+                    const item = document.createElement("li");
+                    item.className = "list-group-item px-0";
+                    item.textContent = `${formatDateTime(entry.changed_at)} · ${entry.changed_by_name || "Quản trị viên"} · ${entry.new_status}${entry.reason ? ` · ${entry.reason}` : ""}`;
+                    list.appendChild(item);
+                });
+                panel.appendChild(list);
+            } catch (error) {
+                const panel = document.getElementById("statusHistory");
+                if (panel) panel.textContent = "Không tải được lịch sử trạng thái.";
+            }
+        }
+
+        async function removeConference(id) {
+            if (!window.confirm("Xóa hội nghị này và các tệp đính kèm? Thao tác này không thể hoàn tác.")) return;
+            const message = document.getElementById("detailActionMessage");
+            try {
+                await deleteConference(id);
+                document.getElementById("conferenceDetail").hidden = true;
+                history.replaceState({}, "", "conference-list.html");
+                await reloadConferences();
+            } catch (error) {
+                message.className = "small text-danger";
+                message.textContent = error.message || "Không xóa được hội nghị.";
+            }
+        }
+
+        async function reloadConferences() {
+            const result = await getConferences();
+            allConferences = result.data || [];
+            applyFilters();
+        }
+
+        function exportConferencesCsv() {
+            const fields = ["code", "title", "organization_name", "start_time", "end_time", "location_name", "expected_participants", "status"];
+            const headers = ["Mã hội nghị", "Chủ đề", "Đơn vị", "Bắt đầu", "Kết thúc", "Địa điểm", "Số người dự kiến", "Trạng thái"];
+            const cell = value => {
+                let text = String(value ?? "");
+                if (/^[=+@\-\t\r]/.test(text)) text = `'${text}`;
+                return `"${text.replace(/"/g, '""')}"`;
+            };
+            const csv = "\uFEFF" + [headers, ...visibleConferences.map(item => fields.map(key => item[key]))]
+                .map(row => row.map(cell).join(",")).join("\r\n");
+            const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = `hoi-nghi-tgpl-${new Date().toISOString().slice(0, 10)}.csv`;
+            link.click();
+            URL.revokeObjectURL(url);
         }
 
         async function renderConferenceAttachments(conferenceId) {
@@ -578,6 +687,8 @@
 
                 }
             );
+
+            document.getElementById("exportCsv").addEventListener("click", exportConferencesCsv);
 
         }
 

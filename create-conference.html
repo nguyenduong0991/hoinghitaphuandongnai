@@ -36,6 +36,7 @@
                 Dashboard
 
             </a>
+            <a href="organizations.html" class="btn btn-outline-light btn-sm ms-2">Quản lý đơn vị</a>
 
         </div>
 
@@ -121,6 +122,7 @@
                         <select id="organization_id" name="organization_id" class="form-select" hidden disabled>
                             <option value="">Đang tải danh sách đơn vị...</option>
                         </select>
+                        <a href="organizations.html" id="manageOrganizationsLink" class="form-text d-inline-block" hidden>Quản lý / thêm đơn vị</a>
 
                     </div>
 
@@ -280,6 +282,7 @@
     <script src="assets/js/config.js"></script>
     <script src="assets/js/api.js"></script>
     <script src="assets/js/attachments.js"></script>
+    <script src="assets/js/auth.js"></script>
 
 
     <!-- LOGIC -->
@@ -310,18 +313,23 @@
         if (isSharedAttachmentStorage()) {
             const organizationName = document.getElementById("organization_name");
             const organizationSelect = document.getElementById("organization_id");
+            document.getElementById("manageOrganizationsLink").hidden = false;
             organizationName.hidden = true;
             organizationName.required = false;
             organizationSelect.hidden = false;
             organizationSelect.disabled = false;
             getOrganizations().then(result => {
                 organizationSelect.innerHTML = '<option value="">Chọn đơn vị đăng ký</option>';
-                (result.data || []).forEach(organization => {
+                const organizations = result.data || [];
+                organizations.forEach(organization => {
                     const option = document.createElement("option");
                     option.value = organization.id;
                     option.textContent = organization.name;
                     organizationSelect.appendChild(option);
                 });
+                if (!organizations.length) {
+                    showError("Chưa có đơn vị. Hãy thêm đơn vị trước khi đăng ký.");
+                }
             }).catch(error => showError(error.message || "Không tải được danh sách đơn vị."));
         }
 

@@ -78,7 +78,13 @@ async function getConferenceAttachments(conferenceId) {
         );
         const result = await response.json().catch(() => null);
         if (!response.ok) throw new Error(result?.message || `Không tải được danh sách tệp (${response.status}).`);
-        return result.data || [];
+        return (result.data || []).map(attachment => ({
+            ...attachment,
+            conference_id: String(conferenceId),
+            name: attachment.name || attachment.file_name,
+            size: attachment.size || attachment.file_size,
+            type: attachment.type || attachment.mime_type
+        }));
     }
 
     return withAttachmentStore("readonly", store =>
@@ -88,10 +94,21 @@ async function getConferenceAttachments(conferenceId) {
 
 async function openConferenceAttachment(attachment) {
     if (isSharedAttachmentStorage()) {
+        const storageKey = attachment.storage_key || attachment.filename;
+        if (!storageKey) throw new Error("Máy chủ chưa trả về đường dẫn tệp.");
         const backendRoot = window.TGPL_API_BASE_URL.replace(/\/api\/?$/, "");
-        const key = attachment.storage_key || attachment.filename;
-        if (!key) throw new Error("Máy chủ chưa trả về đường dẫn tệp.");
-        window.open(`${backendRoot}/uploads/${encodeURIComponent(key)}`, "_blank", "noopener");
+        const response = await fetch(`${backendRoot}/uploads/${encodeURIComponent(storageKey)}`, {
+            headers: localStorage.getItem("tgpl.accessToken")
+                ? { Authorization: `Bearer ${localStorage.getItem("tgpl.accessToken")}` }
+                : {}
+        });
+        if (!response.ok) throw new Error("Không thể tải tệp. Hãy đăng nhập lại và thử lại.");
+        const url = URL.createObjectURL(await response.blob());
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = attachment.name || attachment.file_name || "tai-lieu";
+        link.click();
+        URL.revokeObjectURL(url);
         return;
     }
 
