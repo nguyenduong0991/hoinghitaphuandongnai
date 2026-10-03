@@ -4,4 +4,4 @@
 const isLocalHost = ["localhost", "127.0.0.1"].includes(window.location.hostname);
 window.TGPL_API_BASE_URL = window.TGPL_API_BASE_URL || (isLocalHost
     ? "http://localhost:3001/api"
-    : "https://processor-myrtle-markers-compete.trycloudflare.com/api");
+    : "https://automation-packard-towns-confidentiality.trycloudflare.com/api");

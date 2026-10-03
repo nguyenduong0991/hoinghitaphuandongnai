@@ -14,7 +14,7 @@
     </div></nav>
     <main class="container-fluid py-4">
         <div class="d-flex flex-wrap justify-content-between align-items-end gap-3 mb-3">
-            <div><h2 class="mb-1">Phân tích nhu cầu tổ chức hội nghị</h2><p class="text-muted mb-0">Số liệu dùng chung toàn địa bàn; khu vực thiếu báo cáo được đánh dấu thiếu dữ liệu, không mặc định là ít nhu cầu.</p></div>
+            <div><h2 class="mb-1">Phân tích nhu cầu tổ chức hội nghị</h2><p class="text-muted mb-0">Số liệu hội nghị và người tham dự được tự tổng hợp từ dữ liệu đang lưu; khu vực thiếu báo cáo không mặc định là ít nhu cầu.</p><small id="lastUpdated" class="text-muted">Đang tải số liệu...</small></div>
             <div class="d-flex flex-wrap align-items-end gap-2">
                 <div><label for="fromDate" class="form-label mb-1">Từ ngày</label><input type="date" id="fromDate" class="form-control"></div>
                 <div><label for="toDate" class="form-label mb-1">Đến ngày</label><input type="date" id="toDate" class="form-control"></div>
@@ -30,12 +30,30 @@
         </div>
 
         <div class="row g-3 mb-4">
+            <div class="col-sm-6 col-xl"><div class="card h-100"><div class="card-body"><div class="text-muted">Đăng ký trong kỳ</div><div id="registeredCount" class="display-6">—</div></div></div></div>
+            <div class="col-sm-6 col-xl"><div class="card h-100"><div class="card-body"><div class="text-muted">Chờ phê duyệt</div><div id="pendingCount" class="display-6">—</div></div></div></div>
+            <div class="col-sm-6 col-xl"><div class="card h-100"><div class="card-body"><div class="text-muted">Đã phê duyệt</div><div id="approvedCount" class="display-6">—</div></div></div></div>
+            <div class="col-sm-6 col-xl"><div class="card h-100"><div class="card-body"><div class="text-muted">Đã hoàn thành</div><div id="completedCount" class="display-6">—</div></div></div></div>
+            <div class="col-sm-6 col-xl"><div class="card h-100"><div class="card-body"><div class="text-muted">Đề xuất dời lịch</div><div id="rescheduledCount" class="display-6">—</div></div></div></div>
+        </div>
+        <p class="small text-muted">Các trạng thái được tính theo ngày bắt đầu hội nghị nằm trong khoảng thời gian đã chọn.</p>
+
+        <div class="row g-3 mb-4">
             <div class="col-xl-6"><section class="card h-100"><div class="card-header">Địa bàn có nhiều lượt tiếp cận TGPL được ghi nhận</div><div class="table-responsive"><table class="table table-sm table-hover mb-0"><thead><tr><th>Địa bàn</th><th>Lượt tiếp cận</th><th>Vụ việc</th><th>Kỳ báo cáo</th></tr></thead><tbody id="highDemandRows"></tbody></table></div></section></div>
             <div class="col-xl-6"><section class="card h-100"><div class="card-header">Địa bàn có ít lượt được ghi nhận (có báo cáo)</div><div class="table-responsive"><table class="table table-sm table-hover mb-0"><thead><tr><th>Địa bàn</th><th>Lượt tiếp cận</th><th>Vụ việc</th><th>Kỳ báo cáo</th></tr></thead><tbody id="lowDemandRows"></tbody></table></div></section></div>
         </div>
         <div class="row g-3 mb-4">
-            <div class="col-xl-6"><section class="card h-100"><div class="card-header">Địa bàn tổ chức nhiều hội nghị</div><div class="table-responsive"><table class="table table-sm table-hover mb-0"><thead><tr><th>Địa bàn</th><th>Hội nghị</th><th>Hoàn thành</th><th>Dự kiến</th><th>Thực tế</th></tr></thead><tbody id="manyConferenceRows"></tbody></table></div></section></div>
-            <div class="col-xl-6"><section class="card h-100"><div class="card-header">Địa bàn tổ chức ít hội nghị</div><div class="table-responsive"><table class="table table-sm table-hover mb-0"><thead><tr><th>Địa bàn</th><th>Hội nghị</th><th>Hoàn thành</th><th>Dự kiến</th><th>Thực tế</th></tr></thead><tbody id="fewConferenceRows"></tbody></table></div></section></div>
+            <div class="col-xl-6"><section class="card h-100"><div class="card-header">Đơn vị hoàn thành nhiều hội nghị nhất</div><div class="table-responsive"><table class="table table-sm table-hover mb-0"><thead><tr><th>Đơn vị</th><th>Đăng ký</th><th>Chờ duyệt</th><th>Đã duyệt</th><th>Hoàn thành</th><th>Dự kiến</th><th>Thực tế</th></tr></thead><tbody id="manyConferenceRows"></tbody></table></div></section></div>
+            <div class="col-xl-6"><section class="card h-100"><div class="card-header">Đơn vị ít hoặc chưa hoàn thành hội nghị</div><div class="table-responsive"><table class="table table-sm table-hover mb-0"><thead><tr><th>Đơn vị</th><th>Đăng ký</th><th>Chờ duyệt</th><th>Đã duyệt</th><th>Hoàn thành</th><th>Dự kiến</th><th>Thực tế</th></tr></thead><tbody id="fewConferenceRows"></tbody></table></div></section></div>
+        </div>
+        <div class="row g-3 mb-4">
+            <div class="col-xl-6"><section class="card h-100"><div class="card-header">Địa bàn có số người tham dự thực tế cao</div><div class="table-responsive"><table class="table table-sm table-hover mb-0"><thead><tr><th>Địa bàn</th><th>Người tham dự</th><th>Hội nghị có báo cáo</th></tr></thead><tbody id="highAttendanceRows"></tbody></table></div></section></div>
+            <div class="col-xl-6"><section class="card h-100"><div class="card-header">Địa bàn có số người tham dự thực tế thấp (có báo cáo)</div><div class="table-responsive"><table class="table table-sm table-hover mb-0"><thead><tr><th>Địa bàn</th><th>Người tham dự</th><th>Hội nghị có báo cáo</th></tr></thead><tbody id="lowAttendanceRows"></tbody></table></div><div class="card-footer small text-muted">Chỉ xếp hạng nơi đã có dữ liệu người tham dự; nơi chưa có báo cáo không bị xem là thấp.</div></section></div>
+        </div>
+        <div class="row g-3 mb-4">
+            <div class="col-xl-6"><section class="card h-100"><div class="card-header">Nội dung hội nghị được tổ chức nhiều</div><div class="table-responsive"><table class="table table-sm table-hover mb-0"><thead><tr><th>Nội dung theo tiêu đề</th><th>Số hội nghị</th><th>Hoàn thành</th><th>Người dự kiến</th></tr></thead><tbody id="frequentContentRows"></tbody></table></div></section></div>
+            <div class="col-xl-6"><section class="card h-100"><div class="card-header">Nội dung hội nghị được tổ chức ít</div><div class="table-responsive"><table class="table table-sm table-hover mb-0"><thead><tr><th>Nội dung theo tiêu đề</th><th>Số hội nghị</th><th>Hoàn thành</th><th>Người dự kiến</th></tr></thead><tbody id="infrequentContentRows"></tbody></table></div></section></div>
+            <div class="col-12 small text-muted">Nội dung đang được nhóm theo tiêu đề hội nghị đã nhập; nếu các đơn vị ghi tiêu đề khác nhau cho cùng một chủ đề, hệ thống sẽ tính thành các nội dung riêng.</div>
         </div>
         <section class="card mb-4"><div class="card-header">Địa bàn chưa có số liệu tiếp cận</div><div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>Địa bàn</th><th>Hội nghị trong kỳ</th><th>Trạng thái dữ liệu</th></tr></thead><tbody id="missingDataRows"></tbody></table></div><div class="card-footer small text-muted">Thiếu số liệu không đồng nghĩa với nhu cầu TGPL thấp.</div></section>
         <section class="card mb-4"><div class="card-header">Xu hướng và dự báo lượt tiếp cận TGPL</div><div class="card-body"><div id="trendSummary" class="mb-2 text-muted"></div><div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>Kỳ</th><th>Lượt tiếp cận</th><th>Chuyển gửi</th><th>Vụ việc TGPL</th><th>Địa bàn báo cáo</th></tr></thead><tbody id="trendRows"></tbody></table></div></div></section>
@@ -60,7 +78,7 @@
         </form></section>
         <p id="analysisNote" class="small text-muted"></p>
     </main>
-    <script src="assets/js/config.js"></script>
+    <script src="assets/js/config.js?v=20261003-analytics-1"></script>
     <script src="assets/js/api.js?v=20261003-reschedule-1"></script>
     <script src="assets/js/auth.js"></script>
     <script>
@@ -68,10 +86,11 @@
         const dateFrom = document.getElementById("fromDate");
         const message = document.getElementById("pageMessage");
         const monthNow = new Date();
-        dateTo.value = monthNow.toISOString().slice(0, 10);
+        const localDateString = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+        dateTo.value = localDateString(monthNow);
         const dateFromValue = new Date(monthNow.getFullYear(), monthNow.getMonth() - 11, 1);
-        dateFrom.value = dateFromValue.toISOString().slice(0, 10);
-        document.getElementById("metricMonth").value = monthNow.toISOString().slice(0, 7);
+        dateFrom.value = localDateString(dateFromValue);
+        document.getElementById("metricMonth").value = localDateString(monthNow).slice(0, 7);
 
         function setMessage(text, type = "danger") {
             message.className = `alert alert-${type}`;
@@ -111,6 +130,13 @@
                 ]);
                 const data = analysisResult.data;
                 const areas = data.areas || [];
+                const statusCounts = data.status_counts || {};
+                document.getElementById("registeredCount").textContent = fmt(statusCounts.registered_count);
+                document.getElementById("pendingCount").textContent = fmt(statusCounts.pending_count);
+                document.getElementById("approvedCount").textContent = fmt(statusCounts.approved_count);
+                document.getElementById("completedCount").textContent = fmt(statusCounts.completed_count);
+                document.getElementById("rescheduledCount").textContent = fmt(statusCounts.rescheduled_count);
+                document.getElementById("lastUpdated").textContent = `Tự cập nhật mỗi phút · lần gần nhất ${new Date().toLocaleTimeString("vi-VN")}`;
                 document.getElementById("highCount").textContent = fmt(data.high_demand_areas.length);
                 document.getElementById("lowCount").textContent = fmt(data.low_reported_demand_areas.length);
                 const forecast = data.forecast_next_month;
@@ -121,8 +147,12 @@
                 document.getElementById("coverageCaption").textContent = "địa bàn có ít nhất một kỳ số liệu trong khoảng đã chọn";
                 addRows("highDemandRows", data.high_demand_areas || [], [v => v.name, v => fmt(v.contacts_count), v => fmt(v.cases_count), v => fmt(v.reporting_periods)], "Chưa có số liệu tiếp cận.");
                 addRows("lowDemandRows", data.low_reported_demand_areas || [], [v => v.name, v => fmt(v.contacts_count), v => fmt(v.cases_count), v => fmt(v.reporting_periods)], "Chưa có số liệu tiếp cận.");
-                addRows("manyConferenceRows", [...areas].sort((a,b)=>b.conference_count-a.conference_count).slice(0,5), [v=>v.name,v=>fmt(v.conference_count),v=>fmt(v.completed_count),v=>fmt(v.expected_participants),v=>fmt(v.actual_participants)], "Chưa có hội nghị trong khoảng này.");
-                addRows("fewConferenceRows", [...areas].sort((a,b)=>a.conference_count-b.conference_count).slice(0,5), [v=>v.name,v=>fmt(v.conference_count),v=>fmt(v.completed_count),v=>fmt(v.expected_participants),v=>fmt(v.actual_participants)], "Chưa có hội nghị trong khoảng này.");
+                addRows("manyConferenceRows", data.frequent_organizations || [], [v=>v.name,v=>fmt(v.conference_count),v=>fmt(v.pending_count),v=>fmt(v.approved_count),v=>fmt(v.completed_count),v=>fmt(v.expected_participants),v=>fmt(v.actual_participants)], "Chưa có hội nghị trong khoảng này.");
+                addRows("fewConferenceRows", data.infrequent_organizations || [], [v=>v.name,v=>fmt(v.conference_count),v=>fmt(v.pending_count),v=>fmt(v.approved_count),v=>fmt(v.completed_count),v=>fmt(v.expected_participants),v=>fmt(v.actual_participants)], "Chưa có hội nghị trong khoảng này.");
+                addRows("highAttendanceRows", data.high_attendance_areas || [], [v=>v.name,v=>fmt(v.actual_participants),v=>fmt(v.attendance_reported_conferences)], "Chưa có số liệu người tham dự thực tế.");
+                addRows("lowAttendanceRows", data.low_attendance_areas || [], [v=>v.name,v=>fmt(v.actual_participants),v=>fmt(v.attendance_reported_conferences)], "Chưa có số liệu người tham dự thực tế.");
+                addRows("frequentContentRows", data.most_frequent_conference_contents || [], [v=>v.content_title,v=>fmt(v.conference_count),v=>fmt(v.completed_count),v=>fmt(v.expected_participants)], "Chưa có hội nghị trong khoảng này.");
+                addRows("infrequentContentRows", data.least_frequent_conference_contents || [], [v=>v.content_title,v=>fmt(v.conference_count),v=>fmt(v.completed_count),v=>fmt(v.expected_participants)], "Chưa có hội nghị trong khoảng này.");
                 addRows("missingDataRows", areas.filter(area=>area.reporting_periods===0).sort((a,b)=>a.name.localeCompare(b.name,"vi")), [v=>v.name,v=>fmt(v.conference_count),()=>"Chưa có báo cáo kỳ"], "Các địa bàn đã có số liệu trong khoảng này.");
                 addRows("trendRows", data.monthly_trend || [], [v=>v.month,v=>fmt(v.contacts),v=>fmt(v.referrals),v=>fmt(v.cases),v=>fmt(v.reporting_areas)], "Chưa có chuỗi số liệu theo tháng.");
                 addRows("topicRows", data.topic_demand || [], [v=>v.topic,v=>fmt(v.contacts_count),v=>fmt(v.cases_count)], "Chưa có báo cáo theo chủ đề.");
@@ -178,7 +208,14 @@
             finally { button.disabled = false; }
         });
         document.getElementById("refreshButton").addEventListener("click", loadAnalysis);
-        if (window.TGPL_AUTH_ENABLED) { loadOrganizations(); loadAnalysis(); }
+        dateFrom.addEventListener("change", loadAnalysis);
+        dateTo.addEventListener("change", loadAnalysis);
+        if (window.TGPL_AUTH_ENABLED) {
+            loadOrganizations();
+            loadAnalysis();
+            window.addEventListener("focus", loadAnalysis);
+            window.setInterval(() => { if (document.visibilityState === "visible") loadAnalysis(); }, 60000);
+        }
     </script>
 </body>
 </html>
