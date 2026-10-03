@@ -182,12 +182,14 @@ async function getDemandAnalysis(filters = {}) {
     const query = new URLSearchParams(filters).toString();
     return apiRequest(`/analytics/needs${query ? `?${query}` : ""}`);
 }
-async function getConferenceImpact(months = 3) {
-    return apiRequest(`/analytics/conference-impact?months=${encodeURIComponent(months)}`);
+async function getConferenceImpact(months = 3, filters = {}) {
+    const query = new URLSearchParams({ months: String(months), ...filters }).toString();
+    return apiRequest(`/analytics/conference-impact?${query}`);
 }
 async function recordAccessMetric(metric) {
     return apiRequest("/analytics/metrics", { method: "POST", body: JSON.stringify(metric) });
 }
+async function getAccessMetrics() { return apiRequest("/analytics/metrics"); }
 async function getConferenceStatistics() { return apiRequest("/conferences/statistics"); }
 async function getConferenceAssignments(id) { return apiRequest(`/conferences/${encodeURIComponent(id)}/assignments`); }
 async function createConferenceAssignment(id, assignment) {

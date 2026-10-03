@@ -88,6 +88,7 @@ body {
 .report-total { display: block; margin-top: 7px; color: rgba(255,255,255,.68); font-size: .78rem; }
 .report-footnote { margin-top: 15px; color: rgba(255,255,255,.72); font-size: .78rem; }
 .section-label { color: #435168; font-size: 1rem; font-weight: 700; }
+.report-period-controls { background: #fff; border: 1px solid #e5eaf0; border-radius: 12px; padding: 12px; }
 
 .card {
     border: 0;
