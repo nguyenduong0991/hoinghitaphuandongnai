@@ -10,6 +10,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         console.log("Backend:", health);
 
         await loadDashboard();
+        window.setInterval(loadDashboard, 60_000);
     } catch (error) {
         console.error("Không thể kết nối Backend:", error);
         showConnectionError(error);
@@ -27,6 +28,7 @@ async function loadDashboard() {
         updateStatistics(conferences);
         updateRecentConferences(conferences);
         updateStatusChart(conferences);
+        updateDashboardReport(conferences);
 
     } catch (error) {
         console.error("Lỗi tải dữ liệu Dashboard:", error);
@@ -81,6 +83,91 @@ function updateStatistics(conferences) {
         completed,
         rejected,
         cancelled
+    });
+}
+
+function updateDashboardReport(conferences) {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const currentStart = new Date(today);
+    currentStart.setDate(currentStart.getDate() - 29);
+    const previousStart = new Date(currentStart);
+    previousStart.setDate(previousStart.getDate() - 30);
+    const periodRecords = (start, end) => conferences.filter(item => {
+        const createdAt = new Date(item.created_at || item.createdAt || item.start_time || 0);
+        return !Number.isNaN(createdAt.getTime()) && createdAt >= start && createdAt < end;
+    });
+    const currentEnd = new Date(today);
+    currentEnd.setDate(currentEnd.getDate() + 1);
+    const current = periodRecords(currentStart, currentEnd);
+    const previous = periodRecords(previousStart, currentStart);
+    const countStatus = (records, status) => records.filter(item => item.status === status).length;
+    const sumParticipants = records => records.reduce((sum, item) => sum + (Number(item.expected_participants) || 0), 0);
+
+    setElementText("reportPeriod", `${formatDateOnly(currentStart)} – ${formatDateOnly(now)} · so với 30 ngày liền trước`);
+    setElementText("reportUpdated", `Cập nhật lúc ${now.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}`);
+    setElementText("periodRegistered", current.length.toLocaleString("vi-VN"));
+    setElementText("periodApproved", countStatus(current, "APPROVED").toLocaleString("vi-VN"));
+    setElementText("periodCompleted", countStatus(current, "COMPLETED").toLocaleString("vi-VN"));
+    setElementText("periodParticipants", sumParticipants(current).toLocaleString("vi-VN"));
+    setElementText("registeredTotal", `Toàn hệ thống: ${conferences.length.toLocaleString("vi-VN")} hội nghị`);
+    setElementText("approvedTotal", `Toàn hệ thống: ${countStatus(conferences, "APPROVED").toLocaleString("vi-VN")} hội nghị`);
+    setElementText("completedTotal", `Toàn hệ thống: ${countStatus(conferences, "COMPLETED").toLocaleString("vi-VN")} hội nghị`);
+    setElementText("participantsTotal", `Toàn hệ thống: ${sumParticipants(conferences).toLocaleString("vi-VN")} lượt dự kiến`);
+
+    renderPeriodChange("registeredChange", current.length, previous.length);
+    renderPeriodChange("approvedChange", countStatus(current, "APPROVED"), countStatus(previous, "APPROVED"));
+    renderPeriodChange("completedChange", countStatus(current, "COMPLETED"), countStatus(previous, "COMPLETED"));
+    renderPeriodChange("participantsChange", sumParticipants(current), sumParticipants(previous));
+    updateTrendChart(conferences, now);
+}
+
+function formatDateOnly(value) {
+    return value.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+function renderPeriodChange(id, current, previous) {
+    const element = document.getElementById(id);
+    if (!element) return;
+    element.classList.remove("is-up", "is-down", "is-neutral");
+    if (previous === 0) {
+        element.classList.add(current > 0 ? "is-up" : "is-neutral");
+        element.innerHTML = current > 0
+            ? `<i class="bi bi-arrow-up-right"></i> Mới phát sinh · ${current.toLocaleString("vi-VN")}`
+            : `<i class="bi bi-dash"></i> Chưa phát sinh ở cả hai kỳ`;
+        return;
+    }
+    const change = ((current - previous) / previous) * 100;
+    const direction = change > 0 ? "up" : change < 0 ? "down" : "neutral";
+    const icon = change > 0 ? "bi-arrow-up-right" : change < 0 ? "bi-arrow-down-right" : "bi-dash";
+    element.classList.add(`is-${direction}`);
+    element.innerHTML = `<i class="bi ${icon}"></i> ${change > 0 ? "+" : ""}${change.toLocaleString("vi-VN", { maximumFractionDigits: 1 })}% · kỳ trước ${previous.toLocaleString("vi-VN")}`;
+}
+
+function updateTrendChart(conferences, now) {
+    const canvas = document.getElementById("trendChart");
+    if (!canvas || typeof Chart === "undefined") return;
+    if (window.conferenceTrendChart) window.conferenceTrendChart.destroy();
+    const months = [];
+    for (let offset = 5; offset >= 0; offset--) {
+        months.push(new Date(now.getFullYear(), now.getMonth() - offset, 1));
+    }
+    const labels = months.map(month => month.toLocaleDateString("vi-VN", { month: "short", year: "2-digit" }));
+    const registered = months.map(month => conferences.filter(item => {
+        const date = new Date(item.created_at || item.createdAt || item.start_time || 0);
+        return date.getFullYear() === month.getFullYear() && date.getMonth() === month.getMonth();
+    }).length);
+    const completed = months.map(month => conferences.filter(item => {
+        const date = new Date(item.created_at || item.createdAt || item.start_time || 0);
+        return item.status === "COMPLETED" && date.getFullYear() === month.getFullYear() && date.getMonth() === month.getMonth();
+    }).length);
+    window.conferenceTrendChart = new Chart(canvas, {
+        type: "line",
+        data: { labels, datasets: [
+            { label: "Hội nghị đăng ký", data: registered, borderColor: "#1769aa", backgroundColor: "rgba(23,105,170,.12)", fill: true, tension: .35, pointRadius: 3 },
+            { label: "Đã hoàn thành", data: completed, borderColor: "#198754", backgroundColor: "transparent", tension: .35, pointRadius: 3 }
+        ] },
+        options: { responsive: true, maintainAspectRatio: false, interaction: { intersect: false, mode: "index" }, plugins: { legend: { position: "bottom" } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
     });
 }
 

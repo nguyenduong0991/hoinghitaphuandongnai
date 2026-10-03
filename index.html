@@ -25,7 +25,7 @@
     <!-- CSS của hệ thống -->
     <link
         rel="stylesheet"
-        href="assets/css/style.css"
+        href="assets/css/style.css?v=20261003-dashboard-report-1"
     >
 </head>
 
@@ -91,6 +91,25 @@
             <strong>Bản chạy thử:</strong> dữ liệu được lưu trên backend dùng chung để các tài khoản cùng xem và xử lý. Đây là máy chủ thử nghiệm trên máy tính cá nhân nên chỉ hoạt động khi máy tính và Quick Tunnel đang chạy.
         </div>
 
+        <section class="report-highlight mb-4" aria-labelledby="reportHeading">
+            <div class="report-heading">
+                <div>
+                    <span class="report-eyebrow"><i class="bi bi-activity"></i> BÁO CÁO NHANH</span>
+                    <h3 id="reportHeading">Tình hình 30 ngày gần nhất</h3>
+                    <p id="reportPeriod" class="mb-0">Đang tổng hợp dữ liệu…</p>
+                </div>
+                <span id="reportUpdated" class="report-updated"><i class="bi bi-arrow-repeat"></i> Tự cập nhật khi mở dashboard</span>
+            </div>
+            <div class="row g-3 mt-1">
+                <div class="col-sm-6 col-xl-3"><div class="report-kpi"><span class="report-kpi-label">Hội nghị đăng ký</span><strong id="periodRegistered">—</strong><span id="registeredChange" class="report-change">Đang tải</span><small id="registeredTotal" class="report-total"></small></div></div>
+                <div class="col-sm-6 col-xl-3"><div class="report-kpi"><span class="report-kpi-label">Đã phê duyệt</span><strong id="periodApproved">—</strong><span id="approvedChange" class="report-change">Đang tải</span><small id="approvedTotal" class="report-total"></small></div></div>
+                <div class="col-sm-6 col-xl-3"><div class="report-kpi"><span class="report-kpi-label">Đã hoàn thành</span><strong id="periodCompleted">—</strong><span id="completedChange" class="report-change">Đang tải</span><small id="completedTotal" class="report-total"></small></div></div>
+                <div class="col-sm-6 col-xl-3"><div class="report-kpi"><span class="report-kpi-label">Người dự kiến tham dự</span><strong id="periodParticipants">—</strong><span id="participantsChange" class="report-change">Đang tải</span><small id="participantsTotal" class="report-total"></small></div></div>
+            </div>
+            <div class="report-footnote"><i class="bi bi-info-circle"></i> Tỷ lệ so sánh dựa trên ngày đăng ký; trạng thái phản ánh trạng thái hiện tại. Đây là biến động số liệu, không phải kết luận về nguyên nhân.</div>
+        </section>
+
+        <h5 class="section-label mt-4">Tổng quan toàn hệ thống</h5>
         <div class="row g-3">
 
             <!-- Tổng hồ sơ -->
@@ -187,10 +206,18 @@
              BIỂU ĐỒ
         ========================== -->
 
-        <div class="card mt-4">
+        <div class="row g-3 mt-1">
+        <div class="col-lg-7">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center"><span>Xu hướng đăng ký 6 tháng</span><span class="text-muted small">So với tháng liền trước</span></div>
+            <div class="card-body"><div class="chart-container"><canvas id="trendChart" aria-label="Biểu đồ xu hướng hội nghị đăng ký"></canvas></div></div>
+        </div>
+        </div>
+        <div class="col-lg-5">
+        <div class="card h-100">
 
             <div class="card-header">
-                Thống kê hồ sơ
+                Tỷ trọng trạng thái toàn hệ thống
             </div>
 
             <div class="card-body">
@@ -199,6 +226,8 @@
 
             </div>
 
+        </div>
+        </div>
         </div>
 
 
@@ -252,7 +281,7 @@
     <script src="assets/js/config.js?v=20261003-analytics-1"></script>
     <script src="assets/js/api.js?v=20261003-reschedule-1"></script>
     <script src="assets/js/auth.js"></script>
-    <script src="assets/js/app.js?v=20261003-reschedule-1"></script>
+    <script src="assets/js/app.js?v=20261003-dashboard-report-1"></script>
 
 </body>
 </html>
