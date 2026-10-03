@@ -12,6 +12,15 @@ function attachmentAuthHeaders() {
     return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+function requireAttachmentSession(response) {
+    if (response.status !== 401) return;
+    localStorage.removeItem("tgpl.accessToken");
+    localStorage.removeItem("tgpl.user");
+    const target = `${window.location.pathname}${window.location.search}`;
+    window.location.replace(`login.html?return=${encodeURIComponent(target)}`);
+    throw new Error("Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại để tiếp tục.");
+}
+
 function formatFileSize(bytes) {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -58,6 +67,7 @@ async function uploadConferenceAttachment(conferenceId, file) {
             `${window.TGPL_API_BASE_URL}/conferences/${encodeURIComponent(conferenceId)}/attachments`,
             { method: "POST", headers: attachmentAuthHeaders(), body: formData }
         );
+        requireAttachmentSession(response);
         const result = await response.json().catch(() => null);
         if (!response.ok) throw new Error(result?.message || `Không tải được tệp (${response.status}).`);
         return result.data;
@@ -82,6 +92,7 @@ async function getConferenceAttachments(conferenceId) {
             `${window.TGPL_API_BASE_URL}/conferences/${encodeURIComponent(conferenceId)}/attachments`,
             { headers: attachmentAuthHeaders() }
         );
+        requireAttachmentSession(response);
         const result = await response.json().catch(() => null);
         if (!response.ok) throw new Error(result?.message || `Không tải được danh sách tệp (${response.status}).`);
         return (result.data || []).map(attachment => ({
@@ -106,6 +117,7 @@ async function openConferenceAttachment(attachment) {
         const response = await fetch(`${backendRoot}/uploads/${encodeURIComponent(storageKey)}`, {
             headers: attachmentAuthHeaders()
         });
+        requireAttachmentSession(response);
         if (!response.ok) throw new Error("Không thể tải tệp. Hãy đăng nhập lại và thử lại.");
         const url = URL.createObjectURL(await response.blob());
         const link = document.createElement("a");
