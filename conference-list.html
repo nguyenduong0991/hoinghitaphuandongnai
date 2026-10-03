@@ -254,7 +254,7 @@
     <!-- JAVASCRIPT -->
 
     <script src="assets/js/config.js"></script>
-    <script src="assets/js/api.js?v=20261003-assign-1"></script>
+    <script src="assets/js/api.js?v=20261003-assign-2"></script>
     <script src="assets/js/attachments.js?v=20261003-3"></script>
     <script src="assets/js/auth.js"></script>
 
@@ -500,6 +500,7 @@
                         <div class="col-md-6"><small class="text-muted">Địa điểm</small><div>${escapeHtml(item.location_name || item.location_address || "Chưa cập nhật")}</div></div>
                         <div class="col-md-6"><small class="text-muted">Bắt đầu</small><div>${escapeHtml(formatDateTime(item.start_time))}</div></div>
                         <div class="col-md-6"><small class="text-muted">Kết thúc</small><div>${escapeHtml(formatDateTime(item.end_time))}</div></div>
+                        <div id="scheduleConflictPanel" class="col-12 alert alert-info admin-only mb-0" role="status" hidden>Đang kiểm tra lịch trùng...</div>
                         <div class="col-md-6"><small class="text-muted">Lý do từ chối / hủy</small><div>${escapeHtml(item.rejection_reason || item.cancel_reason || "—")}</div></div>
                         <div class="col-md-6"><small class="text-muted">Số người dự kiến</small><div>${escapeHtml(item.expected_participants ?? 0)}</div></div>
                         <div class="col-12"><small class="text-muted">Nội dung / mục đích</small><div>${escapeHtml(item.description || "Chưa cập nhật")}</div></div>
@@ -558,6 +559,7 @@
                 document.getElementById("uploadAttachmentsButton").addEventListener("click", () => addConferenceAttachments(item.id));
                 document.getElementById("assignmentForm").addEventListener("submit", event => createConferenceTask(event, item.id));
                 document.getElementById("speakerForm").addEventListener("submit", event => createConferenceSpeakerEntry(event, item.id));
+                if (currentUser?.role === "ADMIN") renderScheduleConflicts(item.id);
                 renderConferenceAttachments(item.id);
                 renderConferenceAssignments(item.id);
                 renderConferenceSpeakers(item.id);
@@ -604,6 +606,39 @@
                 message.textContent = error.message || "Không tải được tệp.";
             } finally {
                 button.disabled = false;
+            }
+        }
+
+        async function renderScheduleConflicts(conferenceId) {
+            const panel = document.getElementById("scheduleConflictPanel");
+            if (!panel) return;
+            panel.hidden = false;
+            panel.className = "col-12 alert alert-info admin-only mb-0";
+            panel.textContent = "Đang kiểm tra lịch trùng...";
+            try {
+                const result = await getConferenceScheduleConflicts(conferenceId);
+                const conflicts = result.data || [];
+                panel.replaceChildren();
+                if (!conflicts.length) {
+                    panel.className = "col-12 alert alert-success admin-only mb-0";
+                    panel.textContent = "Không phát hiện khung giờ trùng với hội nghị đã được phê duyệt. Hồ sơ đang chờ phê duyệt được bỏ qua.";
+                    return;
+                }
+                panel.className = "col-12 alert alert-warning admin-only mb-0";
+                const title = document.createElement("strong");
+                title.textContent = `Cảnh báo: có ${conflicts.length} hội nghị đã phê duyệt trùng khung giờ. Cảnh báo này không chặn đăng ký hoặc phê duyệt.`;
+                panel.appendChild(title);
+                const list = document.createElement("ul");
+                list.className = "mb-0 mt-2";
+                conflicts.forEach(conflict => {
+                    const item = document.createElement("li");
+                    item.textContent = `${conflict.code || "Không có mã"} · ${conflict.title} · ${formatDateTime(conflict.start_time)}–${formatDateTime(conflict.end_time)} · ${conflict.location_name || conflict.location_address || "Chưa có địa điểm"}${conflict.organization_name ? ` · ${conflict.organization_name}` : ""}`;
+                    list.appendChild(item);
+                });
+                panel.appendChild(list);
+            } catch (error) {
+                panel.className = "col-12 alert alert-secondary admin-only mb-0";
+                panel.textContent = `Chưa kiểm tra được lịch trùng: ${error.message || "lỗi kết nối"}. Việc đăng ký không bị ảnh hưởng.`;
             }
         }
 

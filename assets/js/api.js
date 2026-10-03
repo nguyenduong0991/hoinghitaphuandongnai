@@ -218,3 +218,6 @@ async function updateConferenceSpeaker(id, speakerId, speaker) {
 async function deleteConferenceSpeaker(id, speakerId) {
     return apiRequest(`/conferences/${encodeURIComponent(id)}/speakers/${encodeURIComponent(speakerId)}`, { method: "DELETE" });
 }
+async function getConferenceScheduleConflicts(id) {
+    return apiRequest(`/conferences/${encodeURIComponent(id)}/schedule-conflicts`);
+}
