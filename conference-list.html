@@ -254,7 +254,7 @@
     <!-- JAVASCRIPT -->
 
     <script src="assets/js/config.js"></script>
-    <script src="assets/js/api.js?v=20261003-assign-2"></script>
+    <script src="assets/js/api.js?v=20261003-assign-3"></script>
     <script src="assets/js/attachments.js?v=20261003-3"></script>
     <script src="assets/js/auth.js"></script>
 
@@ -621,18 +621,20 @@
                 panel.replaceChildren();
                 if (!conflicts.length) {
                     panel.className = "col-12 alert alert-success admin-only mb-0";
-                    panel.textContent = "Không phát hiện khung giờ trùng với hội nghị đã được phê duyệt. Hồ sơ đang chờ phê duyệt được bỏ qua.";
+                    panel.textContent = "Không phát hiện trùng khung giờ và địa điểm hoặc trùng nhân sự với hội nghị đã được phê duyệt. Hồ sơ chờ phê duyệt được bỏ qua.";
                     return;
                 }
                 panel.className = "col-12 alert alert-warning admin-only mb-0";
                 const title = document.createElement("strong");
-                title.textContent = `Cảnh báo: có ${conflicts.length} hội nghị đã phê duyệt trùng khung giờ. Cảnh báo này không chặn đăng ký hoặc phê duyệt.`;
+                title.textContent = `Cảnh báo: có ${conflicts.length} hội nghị đã phê duyệt bị trùng địa điểm hoặc nhân sự trong khung giờ tổ chức. Cảnh báo không chặn đăng ký hoặc phê duyệt.`;
                 panel.appendChild(title);
                 const list = document.createElement("ul");
                 list.className = "mb-0 mt-2";
                 conflicts.forEach(conflict => {
                     const item = document.createElement("li");
-                    item.textContent = `${conflict.code || "Không có mã"} · ${conflict.title} · ${formatDateTime(conflict.start_time)}–${formatDateTime(conflict.end_time)} · ${conflict.location_name || conflict.location_address || "Chưa có địa điểm"}${conflict.organization_name ? ` · ${conflict.organization_name}` : ""}`;
+                    const types = (conflict.conflict_types || []).map(type => type === "VENUE" ? "Trùng khung giờ và địa điểm" : "Trùng báo cáo viên/viên chức");
+                    const people = (conflict.matched_people || []).map(person => person.name).join(", ");
+                    item.textContent = `${types.join("; ")} · ${conflict.code || "Không có mã"} · ${conflict.title} · ${formatDateTime(conflict.start_time)}–${formatDateTime(conflict.end_time)} · ${conflict.location_name || conflict.location_address || "Chưa có địa điểm"}${people ? ` · Nhân sự trùng: ${people}` : ""}${conflict.organization_name ? ` · ${conflict.organization_name}` : ""}`;
                     list.appendChild(item);
                 });
                 panel.appendChild(list);
@@ -665,6 +667,7 @@
                 });
                 form.reset();
                 showAssignmentMessage("assignmentMessage", "Đã giao nhiệm vụ.", true);
+                await renderScheduleConflicts(conferenceId);
                 await renderConferenceAssignments(conferenceId);
             } catch (error) { showAssignmentMessage("assignmentMessage", error.message || "Không giao được nhiệm vụ."); }
             finally { button.disabled = false; }
@@ -706,14 +709,14 @@
                         const update = document.createElement("button"); update.type = "button"; update.className = "btn btn-sm btn-outline-primary"; update.textContent = "Cập nhật trạng thái";
                         update.addEventListener("click", async () => {
                             update.disabled = true;
-                            try { await updateConferenceAssignmentStatus(conferenceId, assignment.id, status.value); await renderConferenceAssignments(conferenceId); }
+                            try { await updateConferenceAssignmentStatus(conferenceId, assignment.id, status.value); await renderScheduleConflicts(conferenceId); await renderConferenceAssignments(conferenceId); }
                             catch (error) { showAssignmentMessage("assignmentMessage", error.message || "Không cập nhật được nhiệm vụ."); }
                             finally { update.disabled = false; }
                         });
                         const remove = document.createElement("button"); remove.type = "button"; remove.className = "btn btn-sm btn-outline-danger"; remove.textContent = "Xóa";
                         remove.addEventListener("click", async () => {
                             if (!confirm("Xóa nhiệm vụ này?")) return;
-                            try { await deleteConferenceAssignment(conferenceId, assignment.id); await renderConferenceAssignments(conferenceId); }
+                            try { await deleteConferenceAssignment(conferenceId, assignment.id); await renderScheduleConflicts(conferenceId); await renderConferenceAssignments(conferenceId); }
                             catch (error) { showAssignmentMessage("assignmentMessage", error.message || "Không xóa được nhiệm vụ."); }
                         });
                         controls.append(status, update, remove); card.appendChild(controls);
@@ -742,6 +745,7 @@
                 document.getElementById("speakerOrder").value = "1";
                 document.getElementById("speakerDuration").value = "30";
                 showAssignmentMessage("speakerMessage", "Đã phân công báo cáo viên.", true);
+                await renderScheduleConflicts(conferenceId);
                 await renderConferenceSpeakers(conferenceId);
             } catch (error) { showAssignmentMessage("speakerMessage", error.message || "Không phân công được báo cáo viên."); }
             finally { button.disabled = false; }
@@ -770,7 +774,7 @@
                         const remove = document.createElement("button"); remove.type = "button"; remove.className = "btn btn-sm btn-outline-danger"; remove.textContent = "Xóa";
                         remove.addEventListener("click", async () => {
                             if (!confirm("Xóa phân công báo cáo viên này?")) return;
-                            try { await deleteConferenceSpeaker(conferenceId, speaker.id); await renderConferenceSpeakers(conferenceId); }
+                            try { await deleteConferenceSpeaker(conferenceId, speaker.id); await renderScheduleConflicts(conferenceId); await renderConferenceSpeakers(conferenceId); }
                             catch (error) { showAssignmentMessage("speakerMessage", error.message || "Không xóa được báo cáo viên."); }
                         });
                         card.appendChild(remove);
