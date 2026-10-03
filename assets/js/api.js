@@ -106,8 +106,19 @@ function localRequest(endpoint, options = {}) {
         const conferences = readStored(STORAGE_KEYS.conferences);
         const conference = conferences.find(item => String(item.id) === id);
         if (!conference) throw new Error("Không tìm thấy hội nghị.");
-        if (!["PENDING", "APPROVED", "COMPLETED", "REJECTED", "CANCELLED"].includes(data.status)) {
+        if (!["PENDING", "APPROVED", "COMPLETED", "REJECTED", "CANCELLED", "RESCHEDULED"].includes(data.status)) {
             throw new Error("Trạng thái hội nghị không hợp lệ.");
+        }
+        if (data.status === "RESCHEDULED") {
+            conference.proposed_start_time = data.proposed_start_time;
+            conference.proposed_end_time = data.proposed_end_time;
+            conference.reschedule_note = data.reschedule_note || null;
+        } else if (data.status === "APPROVED" && conference.status === "RESCHEDULED" && conference.proposed_start_time) {
+            conference.start_time = conference.proposed_start_time;
+            conference.end_time = conference.proposed_end_time;
+            delete conference.proposed_start_time;
+            delete conference.proposed_end_time;
+            delete conference.reschedule_note;
         }
         conference.status = data.status;
         conference.updated_at = new Date().toISOString();
@@ -120,16 +131,6 @@ function localRequest(endpoint, options = {}) {
         const index = conferences.findIndex(item => String(item.id) === id);
         if (index < 0) throw new Error("Không tìm thấy hội nghị.");
         if (method === "GET") return { data: conferences[index] };
-        if (method === "PUT") {
-            conferences[index] = { ...conferences[index], ...data, updated_at: new Date().toISOString() };
-            writeStored(STORAGE_KEYS.conferences, conferences);
-            return { data: conferences[index] };
-        }
-        if (method === "DELETE") {
-            conferences.splice(index, 1);
-            writeStored(STORAGE_KEYS.conferences, conferences);
-            return { success: true };
-        }
     }
     if (endpoint === "/conferences/statistics" && method === "GET") {
         return { data: readStored(STORAGE_KEYS.conferences) };
@@ -149,10 +150,10 @@ async function createOrganization(name) {
     return apiRequest("/organizations", { method: "POST", body: JSON.stringify({ name }) });
 }
 
-async function updateConferenceStatus(id, status, reason = "") {
+async function updateConferenceStatus(id, status, reason = "", scheduleProposal = {}) {
     return apiRequest(`/conferences/${encodeURIComponent(id)}/status`, {
         method: "PATCH",
-        body: JSON.stringify({ status, reason })
+        body: JSON.stringify({ status, reason, ...scheduleProposal })
     });
 }
 
@@ -186,12 +187,6 @@ async function getConferenceImpact(months = 3) {
 }
 async function recordAccessMetric(metric) {
     return apiRequest("/analytics/metrics", { method: "POST", body: JSON.stringify(metric) });
-}
-async function updateConference(id, conferenceData) {
-    return apiRequest(`/conferences/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(conferenceData) });
-}
-async function deleteConference(id) {
-    return apiRequest(`/conferences/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 async function getConferenceStatistics() { return apiRequest("/conferences/statistics"); }
 async function getConferenceAssignments(id) { return apiRequest(`/conferences/${encodeURIComponent(id)}/assignments`); }

@@ -89,9 +89,9 @@ function updateStatusChart(conferences) {
     if (!canvas || typeof Chart === "undefined") return;
     if (window.conferenceStatusChart) window.conferenceStatusChart.destroy();
 
-    const statuses = ["PENDING", "APPROVED", "COMPLETED", "REJECTED", "CANCELLED"];
-    const labels = ["Chờ phê duyệt", "Đã phê duyệt", "Hoàn thành", "Từ chối", "Đã hủy"];
-    const colors = ["#f6c344", "#198754", "#0d6efd", "#dc3545", "#6c757d"];
+    const statuses = ["PENDING", "APPROVED", "COMPLETED", "REJECTED", "CANCELLED", "RESCHEDULED"];
+    const labels = ["Chờ phê duyệt", "Đã phê duyệt", "Hoàn thành", "Từ chối", "Đã hủy", "Đề xuất dời lịch"];
+    const colors = ["#f6c344", "#198754", "#0d6efd", "#dc3545", "#6c757d", "#0dcaf0"];
     window.conferenceStatusChart = new Chart(canvas, {
         type: "doughnut",
         data: {
@@ -222,6 +222,11 @@ function getStatusBadge(status) {
         CANCELLED: {
             text: "Đã hủy",
             className: "bg-secondary"
+        },
+
+        RESCHEDULED: {
+            text: "Đề xuất dời lịch",
+            className: "bg-info text-dark"
         }
     };
 

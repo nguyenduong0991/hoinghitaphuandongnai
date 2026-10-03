@@ -144,6 +144,9 @@
                             <option value="CANCELLED">
                                 Đã hủy
                             </option>
+                            <option value="RESCHEDULED">
+                                Đề xuất dời lịch
+                            </option>
 
                         </select>
 
@@ -254,7 +257,7 @@
     <!-- JAVASCRIPT -->
 
     <script src="assets/js/config.js"></script>
-    <script src="assets/js/api.js?v=20261003-assign-3"></script>
+    <script src="assets/js/api.js?v=20261003-reschedule-1"></script>
     <script src="assets/js/attachments.js?v=20261003-3"></script>
     <script src="assets/js/auth.js"></script>
 
@@ -498,8 +501,9 @@
                         <div class="col-md-12"><small class="text-muted">Chủ đề</small><div class="fw-semibold">${escapeHtml(item.title || "")}</div></div>
                         <div class="col-md-6"><small class="text-muted">Đơn vị đăng ký</small><div>${escapeHtml(item.organization_name || "")}</div></div>
                         <div class="col-md-6"><small class="text-muted">Địa điểm</small><div>${escapeHtml(item.location_name || item.location_address || "Chưa cập nhật")}</div></div>
-                        <div class="col-md-6"><small class="text-muted">Bắt đầu</small><div>${escapeHtml(formatDateTime(item.start_time))}</div></div>
-                        <div class="col-md-6"><small class="text-muted">Kết thúc</small><div>${escapeHtml(formatDateTime(item.end_time))}</div></div>
+                        <div class="col-md-6"><small class="text-muted">Bắt đầu</small><div id="conferenceStartTime">${escapeHtml(formatDateTime(item.start_time))}</div></div>
+                        <div class="col-md-6"><small class="text-muted">Kết thúc</small><div id="conferenceEndTime">${escapeHtml(formatDateTime(item.end_time))}</div></div>
+                        <div id="rescheduleProposalDisplay" class="col-12 alert alert-info mb-0" ${item.proposed_start_time ? "" : "hidden"}><strong>Thời gian đề xuất dời:</strong> <span id="rescheduleProposalText">${item.proposed_start_time ? `${escapeHtml(formatDateTime(item.proposed_start_time))} – ${escapeHtml(formatDateTime(item.proposed_end_time))}${item.reschedule_note ? ` · ${escapeHtml(item.reschedule_note)}` : ""}` : ""}</span></div>
                         <div id="scheduleConflictPanel" class="col-12 alert alert-info admin-only mb-0" role="status" hidden>Đang kiểm tra lịch trùng...</div>
                         <div class="col-md-6"><small class="text-muted">Lý do từ chối / hủy</small><div>${escapeHtml(item.rejection_reason || item.cancel_reason || "—")}</div></div>
                         <div class="col-md-6"><small class="text-muted">Số người dự kiến</small><div>${escapeHtml(item.expected_participants ?? 0)}</div></div>
@@ -545,17 +549,34 @@
                         <div class="col-12"><small class="text-muted">Lịch sử xử lý</small><div id="statusHistory" class="mt-2"><span class="text-muted">Đang tải...</span></div></div>
                         <div class="col-12 border-top pt-3 d-flex flex-wrap align-items-end gap-2 admin-only">
                             <div><label for="statusEdit" class="form-label mb-1">Cập nhật trạng thái</label><select id="statusEdit" class="form-select">
-                                <option value="PENDING">Chờ phê duyệt</option><option value="APPROVED">Đã phê duyệt</option><option value="COMPLETED">Hoàn thành</option><option value="REJECTED">Từ chối</option><option value="CANCELLED">Đã hủy</option>
+                                <option value="PENDING">Chờ phê duyệt</option><option value="APPROVED">Đã phê duyệt</option><option value="COMPLETED">Hoàn thành</option><option value="REJECTED">Từ chối</option><option value="CANCELLED">Đã hủy</option><option value="RESCHEDULED">Đề xuất dời lịch</option>
                             </select></div>
+                            <div id="rescheduleFields" class="row g-2 w-100 admin-only" hidden>
+                                <div class="col-md-4"><label for="proposedStartTime" class="form-label">Ngày giờ đề xuất bắt đầu</label><input id="proposedStartTime" type="datetime-local" class="form-control"></div>
+                                <div class="col-md-4"><label for="proposedEndTime" class="form-label">Ngày giờ đề xuất kết thúc</label><input id="proposedEndTime" type="datetime-local" class="form-control"></div>
+                                <div class="col-md-4"><label for="rescheduleNote" class="form-label">Ghi chú đề xuất</label><input id="rescheduleNote" class="form-control" maxlength="1000" placeholder="Ví dụ: chuyển sang buổi chiều"></div>
+                            </div>
                             <button id="saveStatus" type="button" class="btn btn-primary">Lưu trạng thái</button>
-                            <button id="deleteConference" type="button" class="btn btn-outline-danger ms-auto">Xóa hội nghị</button>
                             <span id="detailActionMessage" class="small" role="status"></span>
                         </div>
                     </div>`;
                 if (currentUser?.role !== "ADMIN") body.querySelectorAll(".admin-only").forEach(element => { element.hidden = true; });
                 document.getElementById("statusEdit").value = item.status || "PENDING";
+                const localDateTimeValue = value => {
+                    if (!value) return "";
+                    const date = new Date(value);
+                    if (Number.isNaN(date.getTime())) return "";
+                    const offset = date.getTimezoneOffset() * 60000;
+                    return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+                };
+                document.getElementById("proposedStartTime").value = localDateTimeValue(item.proposed_start_time);
+                document.getElementById("proposedEndTime").value = localDateTimeValue(item.proposed_end_time);
+                document.getElementById("rescheduleNote").value = item.reschedule_note || "";
+                document.getElementById("rescheduleFields").hidden = item.status !== "RESCHEDULED";
+                document.getElementById("statusEdit").addEventListener("change", event => {
+                    document.getElementById("rescheduleFields").hidden = event.target.value !== "RESCHEDULED";
+                });
                 document.getElementById("saveStatus").addEventListener("click", () => saveConferenceStatus(item.id));
-                document.getElementById("deleteConference").addEventListener("click", () => removeConference(item.id));
                 document.getElementById("uploadAttachmentsButton").addEventListener("click", () => addConferenceAttachments(item.id));
                 document.getElementById("assignmentForm").addEventListener("submit", event => createConferenceTask(event, item.id));
                 document.getElementById("speakerForm").addEventListener("submit", event => createConferenceSpeakerEntry(event, item.id));
@@ -795,12 +816,33 @@
             try {
                 const status = document.getElementById("statusEdit").value;
                 let reason = "";
+                let scheduleProposal = {};
                 if (["REJECTED", "CANCELLED"].includes(status)) {
                     reason = window.prompt(status === "REJECTED" ? "Nhập lý do từ chối hồ sơ:" : "Nhập lý do hủy hội nghị:") || "";
                     if (!reason.trim()) throw new Error("Cần nhập lý do để từ chối hoặc hủy.");
                 }
-                const result = await updateConferenceStatus(id, status, reason);
+                if (status === "RESCHEDULED") {
+                    const proposedStart = document.getElementById("proposedStartTime").value;
+                    const proposedEnd = document.getElementById("proposedEndTime").value;
+                    if (!proposedStart || !proposedEnd || new Date(proposedEnd) <= new Date(proposedStart)) {
+                        throw new Error("Vui lòng nhập ngày giờ đề xuất hợp lệ; thời điểm kết thúc phải sau thời điểm bắt đầu.");
+                    }
+                    scheduleProposal = {
+                        proposed_start_time: new Date(proposedStart).toISOString(),
+                        proposed_end_time: new Date(proposedEnd).toISOString(),
+                        reschedule_note: document.getElementById("rescheduleNote").value.trim()
+                    };
+                }
+                const result = await updateConferenceStatus(id, status, reason, scheduleProposal);
                 document.getElementById("detailStatusBadge").innerHTML = getStatusBadge(result.data?.status || document.getElementById("statusEdit").value);
+                if (result.data?.start_time) document.getElementById("conferenceStartTime").textContent = formatDateTime(result.data.start_time);
+                if (result.data?.end_time) document.getElementById("conferenceEndTime").textContent = formatDateTime(result.data.end_time);
+                const proposalDisplay = document.getElementById("rescheduleProposalDisplay");
+                if (result.data?.proposed_start_time) {
+                    document.getElementById("rescheduleProposalText").textContent = `${formatDateTime(result.data.proposed_start_time)} – ${formatDateTime(result.data.proposed_end_time)}${result.data.reschedule_note ? ` · ${result.data.reschedule_note}` : ""}`;
+                    proposalDisplay.hidden = false;
+                } else proposalDisplay.hidden = true;
+                document.getElementById("rescheduleFields").hidden = status !== "RESCHEDULED";
                 message.className = "small text-success";
                 message.textContent = "Đã cập nhật trạng thái.";
                 renderStatusHistory(id);
@@ -836,20 +878,6 @@
             } catch (error) {
                 const panel = document.getElementById("statusHistory");
                 if (panel) panel.textContent = "Không tải được lịch sử trạng thái.";
-            }
-        }
-
-        async function removeConference(id) {
-            if (!window.confirm("Xóa hội nghị này và các tệp đính kèm? Thao tác này không thể hoàn tác.")) return;
-            const message = document.getElementById("detailActionMessage");
-            try {
-                await deleteConference(id);
-                document.getElementById("conferenceDetail").hidden = true;
-                history.replaceState({}, "", "conference-list.html");
-                await reloadConferences();
-            } catch (error) {
-                message.className = "small text-danger";
-                message.textContent = error.message || "Không xóa được hội nghị.";
             }
         }
 
@@ -1054,6 +1082,12 @@
                     text: "Đã hủy",
                     className:
                         "bg-secondary"
+                },
+
+                RESCHEDULED: {
+                    text: "Đề xuất dời lịch",
+                    className:
+                        "bg-info text-dark"
                 }
 
             };
