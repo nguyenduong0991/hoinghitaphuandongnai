@@ -164,8 +164,12 @@ async function getAuthStatus() { return apiRequest("/auth/status"); }
 async function loginUser(username, password) {
     return apiRequest("/auth/login", { method: "POST", body: JSON.stringify({ username, password }) });
 }
-async function setupAdminUser(username, full_name, password) {
-    return apiRequest("/auth/setup-admin", { method: "POST", body: JSON.stringify({ username, full_name, password }) });
+async function setupAdminUser(username, full_name, password, bootstrapToken = "") {
+    return apiRequest("/auth/setup-admin", {
+        method: "POST",
+        headers: bootstrapToken ? { "X-Admin-Bootstrap-Token": bootstrapToken } : {},
+        body: JSON.stringify({ username, full_name, password })
+    });
 }
 async function getCurrentUser() { return apiRequest("/auth/me"); }
 async function getUsers() { return apiRequest("/users"); }

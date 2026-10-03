@@ -29,6 +29,7 @@
                 <div class="mb-3"><label for="setupFullName" class="form-label">Họ tên</label><input id="setupFullName" class="form-control" value="Quản trị hệ thống" required></div>
                 <div class="mb-3"><label for="setupUsername" class="form-label">Tên đăng nhập</label><input id="setupUsername" class="form-control" value="admin" autocomplete="username" required></div>
                 <div class="mb-3"><label for="setupPassword" class="form-label">Mật khẩu mới</label><input id="setupPassword" type="password" class="form-control" minlength="12" autocomplete="new-password" required></div>
+                <div class="mb-3"><label for="setupBootstrapToken" class="form-label">Mã khởi tạo do quản trị máy chủ cung cấp (nếu có)</label><input id="setupBootstrapToken" type="password" class="form-control" autocomplete="off"><div class="form-text">Máy chủ công khai yêu cầu mã này để tạo admin lần đầu. Máy chủ localhost không cần.</div></div>
                 <button class="btn btn-primary w-100" type="submit">Tạo admin</button>
             </form>
         </section>
@@ -85,7 +86,8 @@
                 saveSession(await setupAdminUser(
                     document.getElementById("setupUsername").value.trim(),
                     document.getElementById("setupFullName").value.trim(),
-                    document.getElementById("setupPassword").value
+                    document.getElementById("setupPassword").value,
+                    document.getElementById("setupBootstrapToken").value
                 ));
             } catch (error) { showMessage(error.message || "Không thể khởi tạo admin."); }
             finally { button.disabled = false; }
