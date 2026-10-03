@@ -194,3 +194,27 @@ async function deleteConference(id) {
     return apiRequest(`/conferences/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 async function getConferenceStatistics() { return apiRequest("/conferences/statistics"); }
+async function getConferenceAssignments(id) { return apiRequest(`/conferences/${encodeURIComponent(id)}/assignments`); }
+async function createConferenceAssignment(id, assignment) {
+    return apiRequest(`/conferences/${encodeURIComponent(id)}/assignments`, { method: "POST", body: JSON.stringify(assignment) });
+}
+async function updateConferenceAssignmentStatus(id, assignmentId, status) {
+    return apiRequest(`/conferences/${encodeURIComponent(id)}/assignments/${encodeURIComponent(assignmentId)}`, {
+        method: "PATCH", body: JSON.stringify({ status })
+    });
+}
+async function deleteConferenceAssignment(id, assignmentId) {
+    return apiRequest(`/conferences/${encodeURIComponent(id)}/assignments/${encodeURIComponent(assignmentId)}`, { method: "DELETE" });
+}
+async function getConferenceSpeakers(id) { return apiRequest(`/conferences/${encodeURIComponent(id)}/speakers`); }
+async function createConferenceSpeaker(id, speaker) {
+    return apiRequest(`/conferences/${encodeURIComponent(id)}/speakers`, { method: "POST", body: JSON.stringify(speaker) });
+}
+async function updateConferenceSpeaker(id, speakerId, speaker) {
+    return apiRequest(`/conferences/${encodeURIComponent(id)}/speakers/${encodeURIComponent(speakerId)}`, {
+        method: "PUT", body: JSON.stringify(speaker)
+    });
+}
+async function deleteConferenceSpeaker(id, speakerId) {
+    return apiRequest(`/conferences/${encodeURIComponent(id)}/speakers/${encodeURIComponent(speakerId)}`, { method: "DELETE" });
+}

@@ -254,7 +254,7 @@
     <!-- JAVASCRIPT -->
 
     <script src="assets/js/config.js"></script>
-    <script src="assets/js/api.js"></script>
+    <script src="assets/js/api.js?v=20261003-assign-1"></script>
     <script src="assets/js/attachments.js?v=20261003-3"></script>
     <script src="assets/js/auth.js"></script>
 
@@ -489,6 +489,8 @@
             try {
                 const result = await getConference(id);
                 const item = result.data || result;
+                let currentUser = null;
+                try { currentUser = JSON.parse(localStorage.getItem("tgpl.user") || "null"); } catch { currentUser = null; }
                 body.innerHTML = `
                     <div class="row g-3">
                         <div class="col-md-6"><small class="text-muted">Mã hội nghị</small><div class="fw-semibold">${escapeHtml(item.code || "")}</div></div>
@@ -511,6 +513,34 @@
                             </div>
                             <div class="form-text">Mỗi tệp tối đa 20 MB. Tệp được lưu trên máy chủ dùng chung.</div>
                         </div>
+                        <div class="col-12 border-top pt-3">
+                            <h5 class="mb-2">Phân công nhiệm vụ</h5>
+                            <div id="conferenceAssignments" class="mb-3"><span class="text-muted">Đang tải phân công...</span></div>
+                            <form id="assignmentForm" class="row g-2 admin-only mb-3">
+                                <div class="col-md-4"><label class="form-label" for="assignmentTitle">Nhiệm vụ</label><input id="assignmentTitle" class="form-control" maxlength="200" required></div>
+                                <div class="col-md-3"><label class="form-label" for="assignmentAssignee">Người nhận</label><input id="assignmentAssignee" class="form-control" maxlength="200" required></div>
+                                <div class="col-md-3"><label class="form-label" for="assignmentOrganization">Đơn vị</label><input id="assignmentOrganization" class="form-control" maxlength="255"></div>
+                                <div class="col-md-2"><label class="form-label" for="assignmentDueAt">Hạn hoàn thành</label><input id="assignmentDueAt" type="datetime-local" class="form-control"></div>
+                                <div class="col-md-9"><label class="form-label" for="assignmentDescription">Mô tả</label><input id="assignmentDescription" class="form-control" maxlength="2000"></div>
+                                <div class="col-md-3 d-flex align-items-end"><button class="btn btn-primary w-100" type="submit">Giao nhiệm vụ</button></div>
+                                <div id="assignmentMessage" class="small" role="status"></div>
+                            </form>
+                        </div>
+                        <div class="col-12 border-top pt-3">
+                            <h5 class="mb-2">Phân công báo cáo viên</h5>
+                            <div id="conferenceSpeakers" class="mb-3"><span class="text-muted">Đang tải báo cáo viên...</span></div>
+                            <form id="speakerForm" class="row g-2 admin-only mb-3">
+                                <div class="col-md-3"><label class="form-label" for="speakerName">Họ tên báo cáo viên</label><input id="speakerName" class="form-control" maxlength="200" required></div>
+                                <div class="col-md-3"><label class="form-label" for="speakerOrganization">Đơn vị</label><input id="speakerOrganization" class="form-control" maxlength="255"></div>
+                                <div class="col-md-3"><label class="form-label" for="speakerRole">Chức vụ</label><input id="speakerRole" class="form-control" maxlength="160"></div>
+                                <div class="col-md-3"><label class="form-label" for="speakerTopic">Chuyên đề trình bày</label><input id="speakerTopic" class="form-control" maxlength="255" required></div>
+                                <div class="col-md-2"><label class="form-label" for="speakerOrder">Thứ tự</label><input id="speakerOrder" type="number" min="1" value="1" class="form-control" required></div>
+                                <div class="col-md-2"><label class="form-label" for="speakerDuration">Thời lượng (phút)</label><input id="speakerDuration" type="number" min="1" max="600" value="30" class="form-control" required></div>
+                                <div class="col-md-6"><label class="form-label" for="speakerNotes">Ghi chú</label><input id="speakerNotes" class="form-control" maxlength="2000"></div>
+                                <div class="col-md-2 d-flex align-items-end"><button class="btn btn-primary w-100" type="submit">Thêm báo cáo viên</button></div>
+                                <div id="speakerMessage" class="small" role="status"></div>
+                            </form>
+                        </div>
                         <div class="col-12"><small class="text-muted">Lịch sử xử lý</small><div id="statusHistory" class="mt-2"><span class="text-muted">Đang tải...</span></div></div>
                         <div class="col-12 border-top pt-3 d-flex flex-wrap align-items-end gap-2 admin-only">
                             <div><label for="statusEdit" class="form-label mb-1">Cập nhật trạng thái</label><select id="statusEdit" class="form-select">
@@ -521,11 +551,16 @@
                             <span id="detailActionMessage" class="small" role="status"></span>
                         </div>
                     </div>`;
+                if (currentUser?.role !== "ADMIN") body.querySelectorAll(".admin-only").forEach(element => { element.hidden = true; });
                 document.getElementById("statusEdit").value = item.status || "PENDING";
                 document.getElementById("saveStatus").addEventListener("click", () => saveConferenceStatus(item.id));
                 document.getElementById("deleteConference").addEventListener("click", () => removeConference(item.id));
                 document.getElementById("uploadAttachmentsButton").addEventListener("click", () => addConferenceAttachments(item.id));
+                document.getElementById("assignmentForm").addEventListener("submit", event => createConferenceTask(event, item.id));
+                document.getElementById("speakerForm").addEventListener("submit", event => createConferenceSpeakerEntry(event, item.id));
                 renderConferenceAttachments(item.id);
+                renderConferenceAssignments(item.id);
+                renderConferenceSpeakers(item.id);
                 renderStatusHistory(item.id);
             } catch (error) {
                 body.innerHTML = `<div class="alert alert-danger mb-0">${escapeHtml(error.message || "Không tải được chi tiết hội nghị.")}</div>`;
@@ -570,6 +605,144 @@
             } finally {
                 button.disabled = false;
             }
+        }
+
+        function showAssignmentMessage(id, text, success = false) {
+            const element = document.getElementById(id);
+            if (!element) return;
+            element.className = `small ${success ? "text-success" : "text-danger"}`;
+            element.textContent = text;
+        }
+
+        async function createConferenceTask(event, conferenceId) {
+            event.preventDefault();
+            const form = event.currentTarget;
+            const due = document.getElementById("assignmentDueAt").value;
+            const button = form.querySelector('button[type="submit"]');
+            button.disabled = true;
+            try {
+                await createConferenceAssignment(conferenceId, {
+                    title: document.getElementById("assignmentTitle").value.trim(),
+                    assignee_name: document.getElementById("assignmentAssignee").value.trim(),
+                    assignee_organization: document.getElementById("assignmentOrganization").value.trim(),
+                    description: document.getElementById("assignmentDescription").value.trim(),
+                    due_at: due ? new Date(due).toISOString() : null
+                });
+                form.reset();
+                showAssignmentMessage("assignmentMessage", "Đã giao nhiệm vụ.", true);
+                await renderConferenceAssignments(conferenceId);
+            } catch (error) { showAssignmentMessage("assignmentMessage", error.message || "Không giao được nhiệm vụ."); }
+            finally { button.disabled = false; }
+        }
+
+        async function renderConferenceAssignments(conferenceId) {
+            const container = document.getElementById("conferenceAssignments");
+            if (!container) return;
+            container.replaceChildren();
+            try {
+                const result = await getConferenceAssignments(conferenceId);
+                const assignments = result.data || [];
+                if (!assignments.length) { container.textContent = "Chưa có nhiệm vụ được phân công."; return; }
+                let currentUser = null;
+                try { currentUser = JSON.parse(localStorage.getItem("tgpl.user") || "null"); } catch { currentUser = null; }
+                const canManage = currentUser?.role === "ADMIN";
+                const statusLabels = { ASSIGNED: "Đã giao", IN_PROGRESS: "Đang thực hiện", COMPLETED: "Hoàn thành", CANCELLED: "Đã hủy" };
+                assignments.forEach(assignment => {
+                    const card = document.createElement("div");
+                    card.className = "border rounded p-2 mb-2";
+                    const heading = document.createElement("div");
+                    heading.className = "fw-semibold";
+                    heading.textContent = `${assignment.title} · ${assignment.assignee_name}${assignment.assignee_organization ? ` (${assignment.assignee_organization})` : ""}`;
+                    card.appendChild(heading);
+                    const details = document.createElement("div");
+                    details.className = "small text-muted";
+                    details.textContent = `${statusLabels[assignment.status] || assignment.status}${assignment.due_at ? ` · Hạn: ${formatDateTime(assignment.due_at)}` : " · Chưa đặt hạn"}${assignment.description ? ` · ${assignment.description}` : ""}`;
+                    card.appendChild(details);
+                    if (canManage) {
+                        const controls = document.createElement("div");
+                        controls.className = "mt-2 d-flex gap-2";
+                        const status = document.createElement("select");
+                        status.className = "form-select form-select-sm";
+                        status.style.maxWidth = "190px";
+                        Object.entries(statusLabels).forEach(([value, label]) => {
+                            const option = document.createElement("option"); option.value = value; option.textContent = label; status.appendChild(option);
+                        });
+                        status.value = assignment.status;
+                        const update = document.createElement("button"); update.type = "button"; update.className = "btn btn-sm btn-outline-primary"; update.textContent = "Cập nhật trạng thái";
+                        update.addEventListener("click", async () => {
+                            update.disabled = true;
+                            try { await updateConferenceAssignmentStatus(conferenceId, assignment.id, status.value); await renderConferenceAssignments(conferenceId); }
+                            catch (error) { showAssignmentMessage("assignmentMessage", error.message || "Không cập nhật được nhiệm vụ."); }
+                            finally { update.disabled = false; }
+                        });
+                        const remove = document.createElement("button"); remove.type = "button"; remove.className = "btn btn-sm btn-outline-danger"; remove.textContent = "Xóa";
+                        remove.addEventListener("click", async () => {
+                            if (!confirm("Xóa nhiệm vụ này?")) return;
+                            try { await deleteConferenceAssignment(conferenceId, assignment.id); await renderConferenceAssignments(conferenceId); }
+                            catch (error) { showAssignmentMessage("assignmentMessage", error.message || "Không xóa được nhiệm vụ."); }
+                        });
+                        controls.append(status, update, remove); card.appendChild(controls);
+                    }
+                    container.appendChild(card);
+                });
+            } catch (error) { container.textContent = error.message || "Không tải được danh sách nhiệm vụ."; }
+        }
+
+        async function createConferenceSpeakerEntry(event, conferenceId) {
+            event.preventDefault();
+            const form = event.currentTarget;
+            const button = form.querySelector('button[type="submit"]');
+            button.disabled = true;
+            try {
+                await createConferenceSpeaker(conferenceId, {
+                    full_name: document.getElementById("speakerName").value.trim(),
+                    organization: document.getElementById("speakerOrganization").value.trim(),
+                    role_title: document.getElementById("speakerRole").value.trim(),
+                    presentation_title: document.getElementById("speakerTopic").value.trim(),
+                    speaking_order: Number(document.getElementById("speakerOrder").value),
+                    duration_minutes: Number(document.getElementById("speakerDuration").value),
+                    notes: document.getElementById("speakerNotes").value.trim()
+                });
+                form.reset();
+                document.getElementById("speakerOrder").value = "1";
+                document.getElementById("speakerDuration").value = "30";
+                showAssignmentMessage("speakerMessage", "Đã phân công báo cáo viên.", true);
+                await renderConferenceSpeakers(conferenceId);
+            } catch (error) { showAssignmentMessage("speakerMessage", error.message || "Không phân công được báo cáo viên."); }
+            finally { button.disabled = false; }
+        }
+
+        async function renderConferenceSpeakers(conferenceId) {
+            const container = document.getElementById("conferenceSpeakers");
+            if (!container) return;
+            container.replaceChildren();
+            try {
+                const result = await getConferenceSpeakers(conferenceId);
+                const speakers = result.data || [];
+                if (!speakers.length) { container.textContent = "Chưa có báo cáo viên được phân công."; return; }
+                let currentUser = null;
+                try { currentUser = JSON.parse(localStorage.getItem("tgpl.user") || "null"); } catch { currentUser = null; }
+                speakers.forEach(speaker => {
+                    const card = document.createElement("div"); card.className = "border rounded p-2 mb-2 d-flex justify-content-between align-items-start gap-2";
+                    const details = document.createElement("div");
+                    const heading = document.createElement("div"); heading.className = "fw-semibold";
+                    heading.textContent = `${speaker.speaking_order}. ${speaker.full_name}${speaker.role_title ? ` · ${speaker.role_title}` : ""}`;
+                    const topic = document.createElement("div"); topic.textContent = `${speaker.presentation_title} · ${speaker.duration_minutes} phút${speaker.organization ? ` · ${speaker.organization}` : ""}`;
+                    details.append(heading, topic);
+                    if (speaker.notes) { const notes = document.createElement("div"); notes.className = "small text-muted"; notes.textContent = speaker.notes; details.appendChild(notes); }
+                    card.appendChild(details);
+                    if (currentUser?.role === "ADMIN") {
+                        const remove = document.createElement("button"); remove.type = "button"; remove.className = "btn btn-sm btn-outline-danger"; remove.textContent = "Xóa";
+                        remove.addEventListener("click", async () => {
+                            if (!confirm("Xóa phân công báo cáo viên này?")) return;
+                            try { await deleteConferenceSpeaker(conferenceId, speaker.id); await renderConferenceSpeakers(conferenceId); }
+                            catch (error) { showAssignmentMessage("speakerMessage", error.message || "Không xóa được báo cáo viên."); }
+                        });
+                        card.appendChild(remove);
+                    }
+                    container.appendChild(card);
+                });
+            } catch (error) { container.textContent = error.message || "Không tải được danh sách báo cáo viên."; }
         }
 
         async function saveConferenceStatus(id) {
