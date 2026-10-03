@@ -81,6 +81,8 @@
              KPI
         ========================== -->
 
+        <div id="connectionError" class="mb-3" style="display:none;"></div>
+
         <div class="row g-3">
 
             <!-- Tổng hồ sơ -->
@@ -94,7 +96,7 @@
                             Tổng hồ sơ
                         </h6>
 
-                        <h2 id="totalConference">
+                        <h2 id="totalConferences">
                             0
                         </h2>
 
@@ -116,7 +118,7 @@
                             Chờ phê duyệt
                         </h6>
 
-                        <h2 id="pendingConference">
+                        <h2 id="pendingConferences">
                             0
                         </h2>
 
@@ -138,7 +140,7 @@
                             Đã phê duyệt
                         </h6>
 
-                        <h2 id="approvedConference">
+                        <h2 id="approvedConferences">
                             0
                         </h2>
 
@@ -160,7 +162,7 @@
                             Hoàn thành
                         </h6>
 
-                        <h2 id="completedConference">
+                        <h2 id="completedConferences">
                             0
                         </h2>
 
@@ -185,7 +187,7 @@
 
             <div class="card-body">
 
-                <canvas id="statusChart"></canvas>
+                <div class="chart-container"><canvas id="statusChart" aria-label="Biểu đồ trạng thái hội nghị"></canvas></div>
 
             </div>
 
@@ -215,6 +217,7 @@
                                 <th>Chủ đề</th>
                                 <th>Đơn vị</th>
                                 <th>Trạng thái</th>
+                                <th>Thao tác</th>
                             </tr>
 
                         </thead>

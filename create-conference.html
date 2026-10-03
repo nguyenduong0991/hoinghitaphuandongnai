@@ -122,8 +122,7 @@
                             id="organization_id"
                             name="organization_id"
                             class="form-control"
-                            value="Xã/Phường mẫu"
-                            placeholder="Nhập tên đơn vị"
+                            placeholder="Nhập tên đơn vị đăng ký"
                             required>
 
                     </div>
@@ -459,7 +458,7 @@
                                     endTime
                                 ).toISOString(),
 
-                            location: location,
+                            location_name: location,
 
                             expected_participants:
                                 expectedParticipants
@@ -509,12 +508,6 @@
                     // --------------------------------------
 
                     form.reset();
-
-
-                    document.getElementById(
-                        "organization_id"
-                    ).value =
-                        "Xã/Phường mẫu";
 
 
                 } catch (error) {

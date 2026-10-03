@@ -58,3 +58,43 @@ body {
     border: none;
     border-radius: 12px;
 }
+
+.chart-container {
+    position: relative;
+    min-height: 280px;
+    max-height: 360px;
+}
+
+.card {
+    border: 0;
+    border-radius: 12px;
+    box-shadow: 0 4px 18px rgba(21, 46, 80, .06);
+}
+
+.card-header {
+    background: #fff;
+    border-bottom-color: #edf0f4;
+    font-weight: 600;
+}
+
+@media (max-width: 767.98px) {
+    .sidebar {
+        width: 100%;
+        height: auto;
+        position: relative;
+    }
+
+    .sidebar h4 {
+        margin-bottom: 0;
+    }
+
+    .sidebar a {
+        display: inline-block;
+        padding: 10px 12px;
+    }
+
+    .content {
+        margin-left: 0;
+        padding: 16px;
+    }
+}

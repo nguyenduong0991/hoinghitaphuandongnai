@@ -67,6 +67,14 @@
              style="display:none;">
         </div>
 
+        <section id="conferenceDetail" class="card mb-4" hidden aria-live="polite">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <strong>Chi tiết hội nghị</strong>
+                <button id="closeDetail" type="button" class="btn btn-sm btn-outline-secondary">Đóng</button>
+            </div>
+            <div id="conferenceDetailBody" class="card-body"></div>
+        </section>
+
 
         <!-- BỘ LỌC -->
         <div class="card mb-4">
@@ -285,6 +293,7 @@
 
 
                     setupFilters();
+                    loadConferenceDetailFromUrl();
 
 
                 } catch (error) {
@@ -456,6 +465,37 @@
                 }
             );
 
+        }
+
+        async function loadConferenceDetailFromUrl() {
+            const id = new URLSearchParams(window.location.search).get("id");
+            if (!id) return;
+            const panel = document.getElementById("conferenceDetail");
+            const body = document.getElementById("conferenceDetailBody");
+            panel.hidden = false;
+            body.innerHTML = '<p class="text-muted mb-0">Đang tải thông tin...</p>';
+            document.getElementById("closeDetail").addEventListener("click", function () {
+                panel.hidden = true;
+                history.replaceState({}, "", "conference-list.html");
+            }, { once: true });
+            try {
+                const result = await getConference(id);
+                const item = result.data || result;
+                body.innerHTML = `
+                    <div class="row g-3">
+                        <div class="col-md-6"><small class="text-muted">Mã hội nghị</small><div class="fw-semibold">${escapeHtml(item.code || "")}</div></div>
+                        <div class="col-md-6"><small class="text-muted">Trạng thái</small><div>${getStatusBadge(item.status)}</div></div>
+                        <div class="col-md-12"><small class="text-muted">Chủ đề</small><div class="fw-semibold">${escapeHtml(item.title || "")}</div></div>
+                        <div class="col-md-6"><small class="text-muted">Đơn vị đăng ký</small><div>${escapeHtml(item.organization_name || "")}</div></div>
+                        <div class="col-md-6"><small class="text-muted">Địa điểm</small><div>${escapeHtml(item.location_name || item.location_address || "Chưa cập nhật")}</div></div>
+                        <div class="col-md-6"><small class="text-muted">Bắt đầu</small><div>${escapeHtml(formatDateTime(item.start_time))}</div></div>
+                        <div class="col-md-6"><small class="text-muted">Kết thúc</small><div>${escapeHtml(formatDateTime(item.end_time))}</div></div>
+                        <div class="col-md-6"><small class="text-muted">Số người dự kiến</small><div>${escapeHtml(item.expected_participants ?? 0)}</div></div>
+                        <div class="col-12"><small class="text-muted">Nội dung / mục đích</small><div>${escapeHtml(item.description || "Chưa cập nhật")}</div></div>
+                    </div>`;
+            } catch (error) {
+                body.innerHTML = `<div class="alert alert-danger mb-0">${escapeHtml(error.message || "Không tải được chi tiết hội nghị.")}</div>`;
+            }
         }
 
 

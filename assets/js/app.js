@@ -26,6 +26,7 @@ async function loadDashboard() {
 
         updateStatistics(conferences);
         updateRecentConferences(conferences);
+        updateStatusChart(conferences);
 
     } catch (error) {
         console.error("Lỗi tải dữ liệu Dashboard:", error);
@@ -83,6 +84,28 @@ function updateStatistics(conferences) {
     });
 }
 
+function updateStatusChart(conferences) {
+    const canvas = document.getElementById("statusChart");
+    if (!canvas || typeof Chart === "undefined") return;
+    if (window.conferenceStatusChart) window.conferenceStatusChart.destroy();
+
+    const statuses = ["PENDING", "APPROVED", "COMPLETED", "REJECTED", "CANCELLED"];
+    const labels = ["Chờ phê duyệt", "Đã phê duyệt", "Hoàn thành", "Từ chối", "Đã hủy"];
+    const colors = ["#f6c344", "#198754", "#0d6efd", "#dc3545", "#6c757d"];
+    window.conferenceStatusChart = new Chart(canvas, {
+        type: "doughnut",
+        data: {
+            labels,
+            datasets: [{
+                data: statuses.map(status => conferences.filter(item => item.status === status).length),
+                backgroundColor: colors,
+                borderWidth: 0
+            }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" } } }
+    });
+}
+
 
 // ======================================================
 // HỒ SƠ GẦN ĐÂY
@@ -126,7 +149,7 @@ function updateRecentConferences(conferences) {
 
         tableBody.innerHTML = `
             <tr>
-                <td colspan="4" class="text-center">
+                <td colspan="5" class="text-center">
                     Chưa có dữ liệu hội nghị
                 </td>
             </tr>
@@ -158,9 +181,8 @@ function updateRecentConferences(conferences) {
                 )}
             </td>
 
-            <td>
-                ${getStatusBadge(conference.status)}
-            </td>
+            <td>${getStatusBadge(conference.status)}</td>
+            <td><a class="btn btn-sm btn-outline-primary" href="conference-list.html?id=${encodeURIComponent(conference.id)}">Xem</a></td>
         `;
 
 
@@ -292,8 +314,7 @@ function showConnectionError(error) {
 
                 <br>
 
-                Vui lòng kiểm tra Backend Node.js
-                tại http://localhost:3000
+                ${escapeHtml(error?.message || "Vui lòng tải lại trang và thử lại.")}
 
             </div>
         `;
