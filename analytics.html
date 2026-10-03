@@ -14,7 +14,7 @@
     </div></nav>
     <main class="container-fluid py-4">
         <div class="d-flex flex-wrap justify-content-between align-items-end gap-3 mb-3">
-            <div><h2 class="mb-1">Phân tích nhu cầu tổ chức hội nghị</h2><p class="text-muted mb-0">Số liệu hội nghị và người tham dự được tự tổng hợp từ dữ liệu đang lưu; khu vực thiếu báo cáo không mặc định là ít nhu cầu.</p><small id="lastUpdated" class="text-muted">Đang tải số liệu...</small></div>
+            <div><h2 class="mb-1">Phân tích nhu cầu tổ chức hội nghị</h2><p class="text-muted mb-0">Số liệu hội nghị và người tham dự được tự tổng hợp từ dữ liệu đang lưu; khoảng mặc định bao gồm lịch dự kiến 12 tháng tới.</p><small id="lastUpdated" class="text-muted">Đang tải số liệu...</small></div>
             <div class="d-flex flex-wrap align-items-end gap-2">
                 <div><label for="fromDate" class="form-label mb-1">Từ ngày</label><input type="date" id="fromDate" class="form-control"></div>
                 <div><label for="toDate" class="form-label mb-1">Đến ngày</label><input type="date" id="toDate" class="form-control"></div>
@@ -87,7 +87,8 @@
         const message = document.getElementById("pageMessage");
         const monthNow = new Date();
         const localDateString = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-        dateTo.value = localDateString(monthNow);
+        const dateToValue = new Date(monthNow.getFullYear(), monthNow.getMonth(), monthNow.getDate() + 365);
+        dateTo.value = localDateString(dateToValue);
         const dateFromValue = new Date(monthNow.getFullYear(), monthNow.getMonth() - 11, 1);
         dateFrom.value = localDateString(dateFromValue);
         document.getElementById("metricMonth").value = localDateString(monthNow).slice(0, 7);
