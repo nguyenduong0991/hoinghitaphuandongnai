@@ -250,7 +250,9 @@
 
     <!-- JAVASCRIPT -->
 
+    <script src="assets/js/config.js"></script>
     <script src="assets/js/api.js"></script>
+    <script src="assets/js/attachments.js"></script>
 
 
     <script>
@@ -492,9 +494,36 @@
                         <div class="col-md-6"><small class="text-muted">Kết thúc</small><div>${escapeHtml(formatDateTime(item.end_time))}</div></div>
                         <div class="col-md-6"><small class="text-muted">Số người dự kiến</small><div>${escapeHtml(item.expected_participants ?? 0)}</div></div>
                         <div class="col-12"><small class="text-muted">Nội dung / mục đích</small><div>${escapeHtml(item.description || "Chưa cập nhật")}</div></div>
+                        <div class="col-12"><small class="text-muted">Tệp đính kèm</small><div id="conferenceAttachments" class="mt-2"><span class="text-muted">Đang tải danh sách tệp...</span></div></div>
                     </div>`;
+                renderConferenceAttachments(item.id);
             } catch (error) {
                 body.innerHTML = `<div class="alert alert-danger mb-0">${escapeHtml(error.message || "Không tải được chi tiết hội nghị.")}</div>`;
+            }
+        }
+
+        async function renderConferenceAttachments(conferenceId) {
+            const list = document.getElementById("conferenceAttachments");
+            if (!list) return;
+            try {
+                const attachments = await getConferenceAttachments(conferenceId);
+                list.replaceChildren();
+                if (!attachments.length) {
+                    list.textContent = "Chưa có tệp đính kèm.";
+                    return;
+                }
+                attachments.forEach(function (attachment) {
+                    const button = document.createElement("button");
+                    button.type = "button";
+                    button.className = "btn btn-sm btn-outline-primary me-2 mb-2";
+                    button.textContent = `${attachment.name || attachment.file_name || "Tệp"} (${formatFileSize(attachment.size || attachment.file_size || 0)})`;
+                    button.addEventListener("click", function () {
+                        openConferenceAttachment(attachment).catch(error => alert(error.message));
+                    });
+                    list.appendChild(button);
+                });
+            } catch (error) {
+                list.textContent = error.message || "Không tải được danh sách tệp.";
             }
         }
 
