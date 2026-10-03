@@ -79,7 +79,7 @@
             message.hidden = false;
         }
         if (!window.TGPL_AUTH_ENABLED) {
-            setMessage("Trang F09 đã được xuất bản. Để tải số liệu dùng chung, lưu báo cáo tiếp cận và xem dự báo, cần triển khai backend PostgreSQL lên máy chủ HTTPS rồi cấu hình API cho website này.", "warning");
+            setMessage("Backend dùng chung chưa được cấu hình. Hãy kiểm tra kết nối API của hệ thống.", "warning");
             document.getElementById("refreshButton").disabled = true;
             document.querySelectorAll("#metricForm input, #metricForm select, #metricForm button").forEach(control => { control.disabled = true; });
         }
