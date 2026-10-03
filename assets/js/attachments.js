@@ -7,6 +7,11 @@ function isSharedAttachmentStorage() {
     return Boolean(window.TGPL_API_BASE_URL);
 }
 
+function attachmentAuthHeaders() {
+    const token = localStorage.getItem("tgpl.accessToken");
+    return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 function formatFileSize(bytes) {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -51,7 +56,7 @@ async function uploadConferenceAttachment(conferenceId, file) {
         formData.append("file", file);
         const response = await fetch(
             `${window.TGPL_API_BASE_URL}/conferences/${encodeURIComponent(conferenceId)}/attachments`,
-            { method: "POST", body: formData }
+            { method: "POST", headers: attachmentAuthHeaders(), body: formData }
         );
         const result = await response.json().catch(() => null);
         if (!response.ok) throw new Error(result?.message || `Không tải được tệp (${response.status}).`);
@@ -74,7 +79,8 @@ async function uploadConferenceAttachment(conferenceId, file) {
 async function getConferenceAttachments(conferenceId) {
     if (isSharedAttachmentStorage()) {
         const response = await fetch(
-            `${window.TGPL_API_BASE_URL}/conferences/${encodeURIComponent(conferenceId)}/attachments`
+            `${window.TGPL_API_BASE_URL}/conferences/${encodeURIComponent(conferenceId)}/attachments`,
+            { headers: attachmentAuthHeaders() }
         );
         const result = await response.json().catch(() => null);
         if (!response.ok) throw new Error(result?.message || `Không tải được danh sách tệp (${response.status}).`);
@@ -98,9 +104,7 @@ async function openConferenceAttachment(attachment) {
         if (!storageKey) throw new Error("Máy chủ chưa trả về đường dẫn tệp.");
         const backendRoot = window.TGPL_API_BASE_URL.replace(/\/api\/?$/, "");
         const response = await fetch(`${backendRoot}/uploads/${encodeURIComponent(storageKey)}`, {
-            headers: localStorage.getItem("tgpl.accessToken")
-                ? { Authorization: `Bearer ${localStorage.getItem("tgpl.accessToken")}` }
-                : {}
+            headers: attachmentAuthHeaders()
         });
         if (!response.ok) throw new Error("Không thể tải tệp. Hãy đăng nhập lại và thử lại.");
         const url = URL.createObjectURL(await response.blob());

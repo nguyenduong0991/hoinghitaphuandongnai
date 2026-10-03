@@ -501,7 +501,16 @@
                         <div class="col-md-6"><small class="text-muted">Lý do từ chối / hủy</small><div>${escapeHtml(item.rejection_reason || item.cancel_reason || "—")}</div></div>
                         <div class="col-md-6"><small class="text-muted">Số người dự kiến</small><div>${escapeHtml(item.expected_participants ?? 0)}</div></div>
                         <div class="col-12"><small class="text-muted">Nội dung / mục đích</small><div>${escapeHtml(item.description || "Chưa cập nhật")}</div></div>
-                        <div class="col-12"><small class="text-muted">Tệp đính kèm</small><div id="conferenceAttachments" class="mt-2"><span class="text-muted">Đang tải danh sách tệp...</span></div></div>
+                        <div class="col-12">
+                            <small class="text-muted">Tệp đính kèm</small>
+                            <div id="conferenceAttachments" class="mt-2"><span class="text-muted">Đang tải danh sách tệp...</span></div>
+                            <div class="mt-2 d-flex flex-wrap align-items-center gap-2">
+                                <input id="attachmentUploadInput" type="file" class="form-control" multiple style="max-width: 420px" aria-label="Chọn tệp đính kèm">
+                                <button id="uploadAttachmentsButton" type="button" class="btn btn-outline-primary">Tải tệp lên</button>
+                                <span id="attachmentUploadMessage" class="small" role="status"></span>
+                            </div>
+                            <div class="form-text">Mỗi tệp tối đa 20 MB. Tệp được lưu trên máy chủ dùng chung.</div>
+                        </div>
                         <div class="col-12"><small class="text-muted">Lịch sử xử lý</small><div id="statusHistory" class="mt-2"><span class="text-muted">Đang tải...</span></div></div>
                         <div class="col-12 border-top pt-3 d-flex flex-wrap align-items-end gap-2 admin-only">
                             <div><label for="statusEdit" class="form-label mb-1">Cập nhật trạng thái</label><select id="statusEdit" class="form-select">
@@ -515,10 +524,51 @@
                 document.getElementById("statusEdit").value = item.status || "PENDING";
                 document.getElementById("saveStatus").addEventListener("click", () => saveConferenceStatus(item.id));
                 document.getElementById("deleteConference").addEventListener("click", () => removeConference(item.id));
+                document.getElementById("uploadAttachmentsButton").addEventListener("click", () => addConferenceAttachments(item.id));
                 renderConferenceAttachments(item.id);
                 renderStatusHistory(item.id);
             } catch (error) {
                 body.innerHTML = `<div class="alert alert-danger mb-0">${escapeHtml(error.message || "Không tải được chi tiết hội nghị.")}</div>`;
+            }
+        }
+
+        async function addConferenceAttachments(conferenceId) {
+            const input = document.getElementById("attachmentUploadInput");
+            const button = document.getElementById("uploadAttachmentsButton");
+            const message = document.getElementById("attachmentUploadMessage");
+            const files = Array.from(input.files || []);
+            if (!files.length) {
+                message.className = "small text-danger";
+                message.textContent = "Hãy chọn ít nhất một tệp.";
+                return;
+            }
+            const oversized = files.find(file => file.size > 20 * 1024 * 1024);
+            if (oversized) {
+                message.className = "small text-danger";
+                message.textContent = `Tệp “${oversized.name}” vượt quá giới hạn 20 MB.`;
+                return;
+            }
+            button.disabled = true;
+            message.className = "small text-muted";
+            message.textContent = "Đang tải tệp lên...";
+            try {
+                const results = await Promise.allSettled(files.map(file => uploadConferenceAttachment(conferenceId, file)));
+                const uploaded = results.filter(result => result.status === "fulfilled").length;
+                const failed = results.length - uploaded;
+                await renderConferenceAttachments(conferenceId);
+                if (failed) {
+                    message.className = "small text-danger";
+                    message.textContent = `Đã tải ${uploaded}/${files.length} tệp. ${failed} tệp lỗi; chọn lại tệp lỗi để thử lại.`;
+                } else {
+                    input.value = "";
+                    message.className = "small text-success";
+                    message.textContent = `Đã tải lên ${uploaded} tệp.`;
+                }
+            } catch (error) {
+                message.className = "small text-danger";
+                message.textContent = error.message || "Không tải được tệp.";
+            } finally {
+                button.disabled = false;
             }
         }
 
