@@ -621,20 +621,24 @@
                 panel.replaceChildren();
                 if (!conflicts.length) {
                     panel.className = "col-12 alert alert-success admin-only mb-0";
-                    panel.textContent = "Không phát hiện trùng khung giờ và địa điểm hoặc trùng nhân sự với hội nghị đã được phê duyệt. Hồ sơ chờ phê duyệt được bỏ qua.";
+                    panel.textContent = "Không phát hiện trùng ngày tổ chức, khung giờ và địa điểm hoặc nhân sự với hội nghị đã được phê duyệt. Hồ sơ chờ phê duyệt được bỏ qua.";
                     return;
                 }
                 panel.className = "col-12 alert alert-warning admin-only mb-0";
                 const title = document.createElement("strong");
-                title.textContent = `Cảnh báo: có ${conflicts.length} hội nghị đã phê duyệt bị trùng địa điểm hoặc nhân sự trong khung giờ tổ chức. Cảnh báo không chặn đăng ký hoặc phê duyệt.`;
+                title.textContent = `Cảnh báo: có ${conflicts.length} hội nghị đã phê duyệt trùng ngày tổ chức, khung giờ/địa điểm hoặc nhân sự. Mỗi mục bên dưới kèm ngày giờ và địa điểm. Cảnh báo không chặn đăng ký hoặc phê duyệt.`;
                 panel.appendChild(title);
                 const list = document.createElement("ul");
                 list.className = "mb-0 mt-2";
                 conflicts.forEach(conflict => {
                     const item = document.createElement("li");
-                    const types = (conflict.conflict_types || []).map(type => type === "VENUE" ? "Trùng khung giờ và địa điểm" : "Trùng báo cáo viên/viên chức");
+                    const types = (conflict.conflict_types || []).map(type => {
+                        if (type === "DAY") return "Trùng ngày tổ chức";
+                        if (type === "VENUE") return "Trùng khung giờ và địa điểm";
+                        return "Trùng báo cáo viên/viên chức";
+                    });
                     const people = (conflict.matched_people || []).map(person => person.name).join(", ");
-                    item.textContent = `${types.join("; ")} · ${conflict.code || "Không có mã"} · ${conflict.title} · ${formatDateTime(conflict.start_time)}–${formatDateTime(conflict.end_time)} · ${conflict.location_name || conflict.location_address || "Chưa có địa điểm"}${people ? ` · Nhân sự trùng: ${people}` : ""}${conflict.organization_name ? ` · ${conflict.organization_name}` : ""}`;
+                    item.textContent = `${types.join("; ")} · ${conflict.code || "Không có mã"} · ${conflict.title} · Ngày giờ: ${formatDateTime(conflict.start_time)}–${formatDateTime(conflict.end_time)} · Địa điểm: ${conflict.location_name || conflict.location_address || "Chưa có địa điểm"}${people ? ` · Nhân sự trùng: ${people}` : ""}${conflict.organization_name ? ` · ${conflict.organization_name}` : ""}`;
                     list.appendChild(item);
                 });
                 panel.appendChild(list);
