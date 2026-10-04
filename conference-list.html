@@ -516,6 +516,49 @@
                             </div>
                             <div class="form-text">Mỗi tệp tối đa 20 MB. Tệp được lưu trên máy chủ dùng chung.</div>
                         </div>
+                        ${currentUser?.role === "ADMIN" ? `
+                        <div class="col-12 border-top pt-3">
+                            <section class="card border-primary-subtle">
+                                <div class="card-header bg-primary-subtle">
+                                    <h5 class="mb-1"><i class="bi bi-list-check me-2"></i>Phân công nhiệm vụ</h5>
+                                    <small>Giao việc, theo dõi tiến độ và hạn hoàn thành.</small>
+                                </div>
+                                <div class="card-body">
+                                    <div id="conferenceAssignments" class="mb-3"><span class="text-muted">Đang tải nhiệm vụ...</span></div>
+                                    <form id="assignmentForm" class="row g-2">
+                                        <div class="col-lg-4"><label class="form-label" for="assignmentTitle">Nhiệm vụ</label><input id="assignmentTitle" class="form-control" maxlength="200" required></div>
+                                        <div class="col-lg-3"><label class="form-label" for="assignmentAssignee">Người nhận</label><input id="assignmentAssignee" class="form-control" maxlength="200" required></div>
+                                        <div class="col-lg-3"><label class="form-label" for="assignmentOrganization">Đơn vị phối hợp</label><input id="assignmentOrganization" class="form-control" maxlength="255"></div>
+                                        <div class="col-lg-2"><label class="form-label" for="assignmentDueAt">Hạn hoàn thành</label><input id="assignmentDueAt" type="datetime-local" class="form-control"></div>
+                                        <div class="col-lg-9"><label class="form-label" for="assignmentDescription">Mô tả</label><input id="assignmentDescription" class="form-control" maxlength="2000"></div>
+                                        <div class="col-lg-3 d-flex align-items-end"><button class="btn btn-primary w-100" type="submit"><i class="bi bi-send me-1"></i>Giao nhiệm vụ</button></div>
+                                        <div id="assignmentMessage" class="small" role="status" aria-live="polite"></div>
+                                    </form>
+                                </div>
+                            </section>
+                        </div>
+                        <div class="col-12 border-top pt-3">
+                            <section class="card border-success-subtle">
+                                <div class="card-header bg-success-subtle">
+                                    <h5 class="mb-1"><i class="bi bi-person-video3 me-2"></i>Phân công báo cáo viên</h5>
+                                    <small>Sắp xếp nội dung trình bày và thời lượng từng chuyên đề.</small>
+                                </div>
+                                <div class="card-body">
+                                    <div id="conferenceSpeakers" class="mb-3"><span class="text-muted">Đang tải báo cáo viên...</span></div>
+                                    <form id="speakerForm" class="row g-2">
+                                        <div class="col-lg-3"><label class="form-label" for="speakerName">Họ tên báo cáo viên</label><input id="speakerName" class="form-control" maxlength="200" required></div>
+                                        <div class="col-lg-3"><label class="form-label" for="speakerOrganization">Đơn vị</label><input id="speakerOrganization" class="form-control" maxlength="255"></div>
+                                        <div class="col-lg-2"><label class="form-label" for="speakerRole">Chức vụ</label><input id="speakerRole" class="form-control" maxlength="160"></div>
+                                        <div class="col-lg-4"><label class="form-label" for="speakerTopic">Chuyên đề trình bày</label><input id="speakerTopic" class="form-control" maxlength="255" required></div>
+                                        <div class="col-md-2"><label class="form-label" for="speakerOrder">Thứ tự trình bày</label><input id="speakerOrder" type="number" min="1" value="1" class="form-control" required></div>
+                                        <div class="col-md-2"><label class="form-label" for="speakerDuration">Thời lượng (phút)</label><input id="speakerDuration" type="number" min="1" max="600" value="30" class="form-control" required></div>
+                                        <div class="col-md-6"><label class="form-label" for="speakerNotes">Ghi chú</label><input id="speakerNotes" class="form-control" maxlength="2000"></div>
+                                        <div class="col-md-2 d-flex align-items-end"><button class="btn btn-success w-100" type="submit"><i class="bi bi-person-plus me-1"></i>Thêm báo cáo viên</button></div>
+                                        <div id="speakerMessage" class="small" role="status" aria-live="polite"></div>
+                                    </form>
+                                </div>
+                            </section>
+                        </div>` : ""}
                         <div class="col-12"><small class="text-muted">Lịch sử xử lý</small><div id="statusHistory" class="mt-2"><span class="text-muted">Đang tải...</span></div></div>
                         <div class="col-12 border-top pt-3 d-flex flex-wrap align-items-end gap-2 admin-only">
                             <div><label for="statusEdit" class="form-label mb-1">Cập nhật trạng thái</label><select id="statusEdit" class="form-select">
@@ -548,7 +591,13 @@
                 });
                 document.getElementById("saveStatus").addEventListener("click", () => saveConferenceStatus(item.id));
                 document.getElementById("uploadAttachmentsButton").addEventListener("click", () => addConferenceAttachments(item.id));
-                if (currentUser?.role === "ADMIN") renderScheduleConflicts(item.id);
+                if (currentUser?.role === "ADMIN") {
+                    document.getElementById("assignmentForm").addEventListener("submit", event => createConferenceTask(event, item.id));
+                    document.getElementById("speakerForm").addEventListener("submit", event => createConferenceSpeakerEntry(event, item.id));
+                    renderScheduleConflicts(item.id);
+                    renderConferenceAssignments(item.id);
+                    renderConferenceSpeakers(item.id);
+                }
                 renderConferenceAttachments(item.id);
                 renderStatusHistory(item.id);
             } catch (error) {
