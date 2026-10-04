@@ -4,4 +4,4 @@
 const isLocalHost = ["localhost", "127.0.0.1"].includes(window.location.hostname);
 window.TGPL_API_BASE_URL = window.TGPL_API_BASE_URL || (isLocalHost
     ? "http://localhost:3001/api"
-    : "https://riverside-navigation-liabilities-consistency.trycloudflare.com/api");
+    : "https://command-type-angeles-laptop.trycloudflare.com/api");
