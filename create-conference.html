@@ -311,7 +311,6 @@
         if (isSharedAttachmentStorage()) {
             const organizationName = document.getElementById("organization_name");
             const organizationSelect = document.getElementById("organization_id");
-            document.getElementById("manageOrganizationsLink").hidden = false;
             organizationName.hidden = true;
             organizationName.required = false;
             organizationSelect.hidden = false;
@@ -327,7 +326,7 @@
                 });
                 if (organizations.length === 1) organizationSelect.value = organizations[0].id;
                 if (!organizations.length) {
-                    showError("Chưa có đơn vị. Hãy thêm đơn vị trước khi đăng ký.");
+                    showError("Tài khoản chưa được gắn với đơn vị. Vui lòng liên hệ quản trị viên.");
                 }
             }).catch(error => showError(error.message || "Không tải được danh sách đơn vị."));
         }
