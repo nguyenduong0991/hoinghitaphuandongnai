@@ -33,7 +33,6 @@
                 class="btn btn-light btn-sm">
                 Dashboard
             </a>
-            <a href="organizations.html" class="btn btn-outline-light btn-sm ms-2 admin-only">Quản lý đơn vị</a>
 
         </div>
     </nav>
@@ -179,7 +178,6 @@
 
                 <div class="d-flex align-items-center gap-2">
                     Danh sách hội nghị
-                    <a href="organizations.html" class="btn btn-sm btn-outline-primary admin-only">Đơn vị</a>
                     <button id="exportCsv" type="button" class="btn btn-sm btn-outline-success">Xuất CSV</button>
                 </div>
 
@@ -518,34 +516,6 @@
                             </div>
                             <div class="form-text">Mỗi tệp tối đa 20 MB. Tệp được lưu trên máy chủ dùng chung.</div>
                         </div>
-                        <div class="col-12 border-top pt-3">
-                            <h5 class="mb-2">Phân công nhiệm vụ</h5>
-                            <div id="conferenceAssignments" class="mb-3"><span class="text-muted">Đang tải phân công...</span></div>
-                            <form id="assignmentForm" class="row g-2 admin-only mb-3">
-                                <div class="col-md-4"><label class="form-label" for="assignmentTitle">Nhiệm vụ</label><input id="assignmentTitle" class="form-control" maxlength="200" required></div>
-                                <div class="col-md-3"><label class="form-label" for="assignmentAssignee">Người nhận</label><input id="assignmentAssignee" class="form-control" maxlength="200" required></div>
-                                <div class="col-md-3"><label class="form-label" for="assignmentOrganization">Đơn vị</label><input id="assignmentOrganization" class="form-control" maxlength="255"></div>
-                                <div class="col-md-2"><label class="form-label" for="assignmentDueAt">Hạn hoàn thành</label><input id="assignmentDueAt" type="datetime-local" class="form-control"></div>
-                                <div class="col-md-9"><label class="form-label" for="assignmentDescription">Mô tả</label><input id="assignmentDescription" class="form-control" maxlength="2000"></div>
-                                <div class="col-md-3 d-flex align-items-end"><button class="btn btn-primary w-100" type="submit">Giao nhiệm vụ</button></div>
-                                <div id="assignmentMessage" class="small" role="status"></div>
-                            </form>
-                        </div>
-                        <div class="col-12 border-top pt-3">
-                            <h5 class="mb-2">Phân công báo cáo viên</h5>
-                            <div id="conferenceSpeakers" class="mb-3"><span class="text-muted">Đang tải báo cáo viên...</span></div>
-                            <form id="speakerForm" class="row g-2 admin-only mb-3">
-                                <div class="col-md-3"><label class="form-label" for="speakerName">Họ tên báo cáo viên</label><input id="speakerName" class="form-control" maxlength="200" required></div>
-                                <div class="col-md-3"><label class="form-label" for="speakerOrganization">Đơn vị</label><input id="speakerOrganization" class="form-control" maxlength="255"></div>
-                                <div class="col-md-3"><label class="form-label" for="speakerRole">Chức vụ</label><input id="speakerRole" class="form-control" maxlength="160"></div>
-                                <div class="col-md-3"><label class="form-label" for="speakerTopic">Chuyên đề trình bày</label><input id="speakerTopic" class="form-control" maxlength="255" required></div>
-                                <div class="col-md-2"><label class="form-label" for="speakerOrder">Thứ tự</label><input id="speakerOrder" type="number" min="1" value="1" class="form-control" required></div>
-                                <div class="col-md-2"><label class="form-label" for="speakerDuration">Thời lượng (phút)</label><input id="speakerDuration" type="number" min="1" max="600" value="30" class="form-control" required></div>
-                                <div class="col-md-6"><label class="form-label" for="speakerNotes">Ghi chú</label><input id="speakerNotes" class="form-control" maxlength="2000"></div>
-                                <div class="col-md-2 d-flex align-items-end"><button class="btn btn-primary w-100" type="submit">Thêm báo cáo viên</button></div>
-                                <div id="speakerMessage" class="small" role="status"></div>
-                            </form>
-                        </div>
                         <div class="col-12"><small class="text-muted">Lịch sử xử lý</small><div id="statusHistory" class="mt-2"><span class="text-muted">Đang tải...</span></div></div>
                         <div class="col-12 border-top pt-3 d-flex flex-wrap align-items-end gap-2 admin-only">
                             <div><label for="statusEdit" class="form-label mb-1">Cập nhật trạng thái</label><select id="statusEdit" class="form-select">
@@ -578,12 +548,8 @@
                 });
                 document.getElementById("saveStatus").addEventListener("click", () => saveConferenceStatus(item.id));
                 document.getElementById("uploadAttachmentsButton").addEventListener("click", () => addConferenceAttachments(item.id));
-                document.getElementById("assignmentForm").addEventListener("submit", event => createConferenceTask(event, item.id));
-                document.getElementById("speakerForm").addEventListener("submit", event => createConferenceSpeakerEntry(event, item.id));
                 if (currentUser?.role === "ADMIN") renderScheduleConflicts(item.id);
                 renderConferenceAttachments(item.id);
-                renderConferenceAssignments(item.id);
-                renderConferenceSpeakers(item.id);
                 renderStatusHistory(item.id);
             } catch (error) {
                 body.innerHTML = `<div class="alert alert-danger mb-0">${escapeHtml(error.message || "Không tải được chi tiết hội nghị.")}</div>`;
