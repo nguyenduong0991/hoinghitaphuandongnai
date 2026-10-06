@@ -121,6 +121,18 @@
                         <select id="organization_id" name="organization_id" class="form-select" hidden disabled>
                             <option value="">Đang tải danh sách đơn vị...</option>
                         </select>
+                        <button type="button" id="addOrganizationButton" class="admin-only btn btn-outline-primary btn-sm mt-2" hidden>+ Thêm đơn vị/xã/phường</button>
+                        <button type="button" id="editOrganizationButton" class="admin-only btn btn-outline-secondary btn-sm mt-2" hidden disabled>Sửa tên đơn vị đang chọn</button>
+                        <div id="editOrganizationMessage" class="small mt-2" role="status" aria-live="polite"></div>
+                        <div id="addOrganizationPanel" class="border rounded p-3 mt-2" hidden>
+                            <label for="newOrganizationName" class="form-label">Tên đơn vị/xã/phường</label>
+                            <div class="d-flex flex-wrap gap-2">
+                                <input type="text" id="newOrganizationName" class="form-control" maxlength="255" placeholder="Ví dụ: UBND xã Lộc Tấn">
+                                <button type="button" id="saveOrganizationButton" class="btn btn-primary text-nowrap">Lưu đơn vị</button>
+                                <button type="button" id="cancelOrganizationButton" class="btn btn-outline-secondary">Hủy</button>
+                            </div>
+                            <div id="organizationMessage" class="small mt-2" role="status" aria-live="polite"></div>
+                        </div>
 
                     </div>
 
@@ -278,9 +290,9 @@
 
     <!-- API -->
     <script src="assets/js/config.js?v=20261004-tunnel-2"></script>
-    <script src="assets/js/api.js?v=20261003-unit-scope-1"></script>
+    <script src="assets/js/api.js?v=20261007-organization-edit-1"></script>
     <script src="assets/js/attachments.js?v=20261003-3"></script>
-    <script src="assets/js/auth.js"></script>
+    <script src="assets/js/auth.js?v=20261004-deadline-1"></script>
 
 
     <!-- LOGIC -->
@@ -308,28 +320,136 @@
         const attachmentNotice = document.getElementById("attachmentNotice");
         const maxAttachmentSize = 20 * 1024 * 1024;
 
-        if (isSharedAttachmentStorage()) {
-            const organizationName = document.getElementById("organization_name");
-            const organizationSelect = document.getElementById("organization_id");
+        const organizationName = document.getElementById("organization_name");
+        const organizationSelect = document.getElementById("organization_id");
+        const addOrganizationButton = document.getElementById("addOrganizationButton");
+        const addOrganizationPanel = document.getElementById("addOrganizationPanel");
+        const newOrganizationName = document.getElementById("newOrganizationName");
+        const saveOrganizationButton = document.getElementById("saveOrganizationButton");
+        const organizationMessage = document.getElementById("organizationMessage");
+        const editOrganizationButton = document.getElementById("editOrganizationButton");
+        const editOrganizationMessage = document.getElementById("editOrganizationMessage");
+
+        function applyOrganizationMode() {
+            if (!isSharedAttachmentStorage()) return;
             organizationName.hidden = true;
             organizationName.required = false;
             organizationSelect.hidden = false;
             organizationSelect.disabled = false;
-            getOrganizations().then(result => {
-                organizationSelect.innerHTML = '<option value="">Chọn đơn vị đăng ký</option>';
-                const organizations = result.data || [];
-                organizations.forEach(organization => {
-                    const option = document.createElement("option");
-                    option.value = organization.id;
-                    option.textContent = organization.name;
-                    organizationSelect.appendChild(option);
-                });
-                if (organizations.length === 1) organizationSelect.value = organizations[0].id;
-                if (!organizations.length) {
-                    showError("Tài khoản chưa được gắn với đơn vị. Vui lòng liên hệ quản trị viên.");
-                }
-            }).catch(error => showError(error.message || "Không tải được danh sách đơn vị."));
         }
+
+        async function loadOrganizations(selectedId = "") {
+            const result = await getOrganizations();
+            const organizations = result.data || [];
+            organizationSelect.innerHTML = '<option value="">Chọn đơn vị đăng ký</option>';
+            organizations.forEach(organization => {
+                const option = document.createElement("option");
+                option.value = organization.id;
+                option.textContent = organization.name;
+                organizationSelect.appendChild(option);
+            });
+            if (selectedId) organizationSelect.value = selectedId;
+            else if (organizations.length === 1) organizationSelect.value = organizations[0].id;
+            editOrganizationButton.disabled = !organizationSelect.value;
+            if (!organizations.length && window.tgplCurrentUser?.role !== "ADMIN") {
+                showError("Tài khoản chưa được gắn với đơn vị. Vui lòng liên hệ quản trị viên.");
+            }
+        }
+
+        function setAdminOrganizationAccess(user) {
+            const isAdmin = user?.role === "ADMIN";
+            addOrganizationButton.hidden = !isAdmin;
+            addOrganizationButton.style.display = isAdmin ? "" : "none";
+            editOrganizationButton.hidden = !isAdmin;
+            editOrganizationButton.style.display = isAdmin ? "" : "none";
+            if (!isAdmin) addOrganizationPanel.hidden = true;
+        }
+
+        applyOrganizationMode();
+        try { setAdminOrganizationAccess(JSON.parse(localStorage.getItem("tgpl.user") || "null")); }
+        catch { setAdminOrganizationAccess(null); }
+        if (isSharedAttachmentStorage()) {
+            loadOrganizations().catch(error => showError(error.message || "Không tải được danh sách đơn vị."));
+        }
+        window.addEventListener("tgpl:authenticated", event => setAdminOrganizationAccess(event.detail?.user));
+
+        organizationSelect.addEventListener("change", () => {
+            editOrganizationButton.disabled = !organizationSelect.value;
+        });
+
+        editOrganizationButton.addEventListener("click", async () => {
+            if (window.tgplCurrentUser?.role !== "ADMIN") {
+                showError("Chỉ quản trị viên mới có quyền sửa tên đơn vị.");
+                return;
+            }
+            const selectedId = organizationSelect.value;
+            const selectedName = organizationSelect.selectedOptions[0]?.textContent || "";
+            if (!selectedId) {
+                editOrganizationMessage.textContent = "Hãy chọn đơn vị cần sửa tên.";
+                editOrganizationMessage.className = "small mt-2 text-danger";
+                return;
+            }
+            const name = window.prompt("Nhập tên mới cho xã/phường/đơn vị:", selectedName)?.trim();
+            if (!name || name === selectedName) return;
+            editOrganizationMessage.textContent = "";
+            editOrganizationButton.disabled = true;
+            editOrganizationButton.textContent = "Đang cập nhật...";
+            try {
+                const result = await updateOrganization(selectedId, { name });
+                const updated = result.organization || result.data || result;
+                await loadOrganizations(updated.id || selectedId);
+                editOrganizationMessage.textContent = "Đã cập nhật tên đơn vị. Tên mới sẽ được dùng khi tạo hội nghị.";
+                editOrganizationMessage.className = "small mt-2 text-success";
+            } catch (error) {
+                editOrganizationMessage.textContent = error.message || "Không sửa được tên đơn vị.";
+                editOrganizationMessage.className = "small mt-2 text-danger";
+            } finally {
+                editOrganizationButton.disabled = !organizationSelect.value;
+                editOrganizationButton.textContent = "Sửa tên đơn vị đang chọn";
+            }
+        });
+
+        addOrganizationButton.addEventListener("click", () => {
+            addOrganizationPanel.hidden = false;
+            organizationMessage.textContent = "";
+            newOrganizationName.focus();
+        });
+        document.getElementById("cancelOrganizationButton").addEventListener("click", () => {
+            addOrganizationPanel.hidden = true;
+            newOrganizationName.value = "";
+        });
+        saveOrganizationButton.addEventListener("click", async () => {
+            const name = newOrganizationName.value.trim();
+            organizationMessage.className = "small mt-2";
+            if (!name) {
+                organizationMessage.textContent = "Vui lòng nhập tên đơn vị/xã/phường.";
+                organizationMessage.classList.add("text-danger");
+                newOrganizationName.focus();
+                return;
+            }
+            if (window.tgplCurrentUser?.role !== "ADMIN") {
+                organizationMessage.textContent = "Chỉ quản trị viên mới có quyền thêm đơn vị.";
+                organizationMessage.classList.add("text-danger");
+                return;
+            }
+            saveOrganizationButton.disabled = true;
+            saveOrganizationButton.textContent = "Đang lưu...";
+            try {
+                const result = await createOrganization(name);
+                const created = result.organization || result.data || result;
+                await loadOrganizations(created.id || "");
+                if (created.id) organizationSelect.value = created.id;
+                organizationMessage.textContent = "Đã thêm đơn vị. Đơn vị mới đã được chọn cho hội nghị này.";
+                organizationMessage.classList.add("text-success");
+                newOrganizationName.value = "";
+            } catch (error) {
+                organizationMessage.textContent = error.message || "Không thêm được đơn vị.";
+                organizationMessage.classList.add("text-danger");
+            } finally {
+                saveOrganizationButton.disabled = false;
+                saveOrganizationButton.textContent = "Lưu đơn vị";
+            }
+        });
 
         attachmentNotice.textContent = isSharedAttachmentStorage()
             ? "Tệp sẽ được lưu trên máy chủ dùng chung."

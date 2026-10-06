@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Phân công · Hội nghị TGPL</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+    <nav class="navbar navbar-dark bg-primary"><div class="container-fluid">
+        <span class="navbar-brand mb-0 h1">Phân công hội nghị</span>
+        <div class="d-flex align-items-center gap-2 ms-auto">
+            <div id="staffNotificationWrap" class="position-relative">
+                <button id="staffNotificationButton" type="button" class="btn btn-light position-relative" aria-label="Thông báo nhiệm vụ mới" aria-expanded="false" aria-controls="staffNotificationPanel">
+                    <span aria-hidden="true">🔔</span>
+                    <span id="staffNotificationBadge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill text-bg-danger" hidden>0</span>
+                </button>
+                <div id="staffNotificationPanel" class="card shadow position-absolute end-0 mt-2" style="width:min(92vw, 420px); z-index:1050; max-height:60vh; overflow:auto;" hidden>
+                    <div class="card-header fw-semibold">Nhiệm vụ mới</div>
+                    <div id="staffNotificationList" class="list-group list-group-flush"><div class="list-group-item text-muted">Đang tải...</div></div>
+                </div>
+            </div>
+            <a href="staff-portal.html" class="btn btn-outline-light btn-sm">Tải lại danh sách</a>
+        </div>
+    </div></nav>
+    <main class="container py-4">
+        <div class="mb-4"><h2 id="welcome">Nhiệm vụ và lịch báo cáo viên</h2><p class="text-muted mb-0">Danh sách phân công dùng chung cho người nhận nhiệm vụ và báo cáo viên. Thông tin liên hệ cá nhân không hiển thị tại đây.</p></div>
+        <div id="message" class="alert alert-danger" hidden></div>
+        <section class="card mb-4"><div class="card-header d-flex justify-content-between align-items-center"><strong>Nhiệm vụ được giao</strong><span id="taskCount" class="badge text-bg-primary">0</span></div><div id="taskList" class="card-body"><span class="text-muted">Đang tải...</span></div></section>
+        <section class="card"><div class="card-header d-flex justify-content-between align-items-center"><strong>Lịch báo cáo viên</strong><span id="speakerCount" class="badge text-bg-success">0</span></div><div id="speakerList" class="card-body"><span class="text-muted">Đang tải...</span></div></section>
+    </main>
+    <script src="assets/js/config.js?v=20261005-task-attachments-2"></script>
+    <script src="assets/js/api.js?v=20261005-task-attachments-2"></script>
+    <script src="assets/js/auth.js?v=20261005-task-attachments-2"></script>
+    <script src="assets/js/attachments.js?v=20261005-attachment-management-4"></script>
+    <script>
+        const currentUser = JSON.parse(localStorage.getItem("tgpl.user") || "null");
+        const dateTime = value => value ? new Date(value).toLocaleString("vi-VN", { dateStyle: "medium", timeStyle: "short" }) : "Chưa xác định";
+        function line(parent, text, className = "") { const div = document.createElement("div"); div.className = className; div.textContent = text; parent.appendChild(div); return div; }
+        function conferenceInfo(item) { return `${item.conference_code || ""} · ${item.conference_title || "Hội nghị"} · ${item.organization_name || ""}`; }
+        const staffReadKey = `tgpl.staff-notifications.read.${currentUser?.id || currentUser?.username || "unknown"}`;
+        function readStaffNotificationIds() {
+            try { const ids = JSON.parse(localStorage.getItem(staffReadKey) || "[]"); return new Set(Array.isArray(ids) ? ids : []); }
+            catch { return new Set(); }
+        }
+        function saveStaffNotificationIds(ids) { localStorage.setItem(staffReadKey, JSON.stringify([...ids])); }
+        function renderStaffNotifications(tasks, speakers) {
+            const list = document.getElementById("staffNotificationList");
+            const badge = document.getElementById("staffNotificationBadge");
+            const button = document.getElementById("staffNotificationButton");
+            const panel = document.getElementById("staffNotificationPanel");
+            const assignedTasks = currentUser?.role === "TASK_ASSIGNEE"
+                ? tasks.filter(item => String(item.assignee_user_id) === String(currentUser.id) && !["COMPLETED", "CANCELLED"].includes(item.status)).map(item => ({ ...item, noticeId: `TASK:${item.id}`, kind: "TASK" }))
+                : [];
+            const assignedSessions = currentUser?.role === "SPEAKER"
+                ? speakers.filter(item => String(item.speaker_user_id) === String(currentUser.id) && item.start_time && new Date(item.start_time).getTime() >= Date.now()).map(item => ({ ...item, noticeId: `SPEAKER:${item.id}`, kind: "SPEAKER" }))
+                : [];
+            const entries = [...assignedTasks, ...assignedSessions].sort((a, b) => new Date(a.due_at || a.start_time || 0) - new Date(b.due_at || b.start_time || 0));
+            const readIds = readStaffNotificationIds();
+            const unread = entries.filter(item => !readIds.has(item.noticeId));
+            badge.textContent = String(unread.length);
+            badge.hidden = unread.length === 0;
+            list.replaceChildren();
+            if (!entries.length) {
+                line(list, "Chưa có nhiệm vụ mới dành cho tài khoản này.", "list-group-item text-muted");
+                return;
+            }
+            if (!unread.length) {
+                line(list, "Không có thông báo mới. Các phân công của bạn đã được xem.", "list-group-item text-muted");
+                return;
+            }
+            unread.forEach(item => {
+                const link = document.createElement("a");
+                link.href = `#${item.noticeId.replace(":", "-")}`;
+                link.className = "list-group-item list-group-item-action";
+                const title = document.createElement("div"); title.className = "fw-semibold";
+                title.textContent = item.kind === "TASK" ? `Nhiệm vụ mới: ${item.title || "Chưa có tiêu đề"}` : `Lịch báo cáo mới: ${item.presentation_title || "Chưa có chuyên đề"}`;
+                const detail = document.createElement("div"); detail.className = "small text-muted";
+                detail.textContent = `${item.conference_title || "Hội nghị"} · ${item.organization_name || ""} · ${item.kind === "TASK" ? `Hạn: ${dateTime(item.due_at)}` : `Thời gian: ${dateTime(item.start_time)}`}`;
+                link.append(title, detail);
+                link.addEventListener("click", event => {
+                    event.preventDefault();
+                    readIds.add(item.noticeId); saveStaffNotificationIds(readIds);
+                    const target = document.getElementById(item.noticeId.replace(":", "-"));
+                    panel.hidden = true; button.setAttribute("aria-expanded", "false");
+                    if (target) { target.scrollIntoView({ behavior: "smooth", block: "center" }); target.classList.add("border-primary", "shadow"); window.setTimeout(() => target.classList.remove("border-primary", "shadow"), 2200); }
+                    renderStaffNotifications(tasks, speakers);
+                });
+                list.appendChild(link);
+            });
+        }
+        document.getElementById("staffNotificationButton").addEventListener("click", () => {
+            const panel = document.getElementById("staffNotificationPanel");
+            const button = document.getElementById("staffNotificationButton");
+            panel.hidden = !panel.hidden; button.setAttribute("aria-expanded", String(!panel.hidden));
+        });
+        document.addEventListener("click", event => {
+            const wrap = document.getElementById("staffNotificationWrap");
+            const panel = document.getElementById("staffNotificationPanel");
+            if (!wrap.contains(event.target)) { panel.hidden = true; document.getElementById("staffNotificationButton").setAttribute("aria-expanded", "false"); }
+        });
+        function appendChangeRequest(card, type, assignmentId, requests, serviceAvailable) {
+            if (!serviceAvailable) {
+                line(card, "Danh sách công việc vẫn hoạt động; chức năng gửi đề nghị đổi cán bộ cần khởi động lại backend.", "small text-warning mt-3");
+                return;
+            }
+            const relatedRequests = requests
+                .filter(item => item.request_type === type && String(type === "TASK" ? item.task_assignment_id : item.speaker_assignment_id) === String(assignmentId))
+                .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+            const request = relatedRequests[0];
+            if (relatedRequests.length) {
+                const history = document.createElement("section"); history.className = "mt-3";
+                line(history, "Lịch sử đề nghị đổi cán bộ", "small fw-semibold mb-2");
+                const statusLabels = { PENDING: "Đang chờ admin xử lý", APPROVED: "Admin đã chấp thuận", REJECTED: "Admin đã từ chối" };
+                relatedRequests.forEach(item => {
+                    const style = item.status === "REJECTED" ? "alert alert-danger" : item.status === "APPROVED" ? "alert alert-success" : "alert alert-warning";
+                    const entry = document.createElement("div"); entry.className = `${style} py-2 mb-2`;
+                    line(entry, `${statusLabels[item.status] || item.status} · gửi ${dateTime(item.created_at)}${item.reviewed_at ? ` · phản hồi ${dateTime(item.reviewed_at)}` : ""}`, "small fw-semibold");
+                    line(entry, `Lý do đề nghị: ${item.reason || "Không có nội dung"}`, "small mt-1");
+                    if (item.status === "REJECTED") line(entry, `Phản hồi của admin: ${item.admin_note || "Admin chưa ghi chú thêm."}`, "small mt-1");
+                    else if (item.admin_note) line(entry, `Ghi chú của admin: ${item.admin_note}`, "small mt-1");
+                    history.appendChild(entry);
+                });
+                card.appendChild(history);
+            }
+            if (request?.status === "PENDING") {
+                return;
+            }
+            if (request?.status === "APPROVED") {
+                return;
+            }
+            const form = document.createElement("form"); form.className = "border-top mt-3 pt-3";
+            const label = document.createElement("label"); label.className = "form-label fw-semibold"; label.textContent = "Đề nghị đổi cán bộ";
+            const reason = document.createElement("textarea"); reason.className = "form-control"; reason.rows = 2; reason.minLength = 5; reason.maxLength = 2000; reason.required = true; reason.placeholder = "Ghi rõ lý do cần đổi cán bộ (tối thiểu 5 ký tự)";
+            const actions = document.createElement("div"); actions.className = "d-flex flex-wrap align-items-center gap-2 mt-2";
+            const submit = document.createElement("button"); submit.type = "submit"; submit.className = "btn btn-sm btn-outline-primary"; submit.textContent = "Gửi đề nghị";
+            const feedback = document.createElement("span"); feedback.className = "small"; feedback.setAttribute("role", "status");
+            actions.append(submit, feedback); form.append(label, reason, actions);
+            form.addEventListener("submit", async event => {
+                event.preventDefault(); submit.disabled = true; feedback.className = "small text-muted"; feedback.textContent = "Đang gửi...";
+                try {
+                    const result = await createStaffChangeRequest({ request_type: type, assignment_id: assignmentId, reason: reason.value.trim() });
+                    feedback.className = "small text-success"; feedback.textContent = "Đã gửi đề nghị; admin sẽ xem xét.";
+                    reason.disabled = true; submit.remove();
+                    if (type === "TASK") {
+                        const completeOption = Array.from(card.querySelectorAll("select option")).find(option => option.value === "COMPLETED");
+                        if (completeOption) completeOption.remove();
+                        line(card, "Đề nghị đổi cán bộ đang chờ admin xử lý; chưa thể đánh dấu nhiệm vụ hoàn thành.", "small text-warning mt-2");
+                    }
+                } catch (error) { feedback.className = "small text-danger"; feedback.textContent = error.message || "Không gửi được đề nghị."; submit.disabled = false; }
+            });
+            card.appendChild(form);
+        }
+        async function appendTaskAttachments(card, task) {
+            const section = document.createElement("section"); section.className = "border-top mt-3 pt-3";
+            const heading = document.createElement("div"); heading.className = "fw-semibold mb-2"; heading.textContent = "Tệp đính kèm nhiệm vụ"; section.appendChild(heading);
+            const files = document.createElement("div"); files.className = "list-group list-group-flush mb-2";
+            const showFiles = async () => {
+                files.replaceChildren();
+                try {
+                    const attachments = await getTaskAttachments(task.id);
+                    if (!attachments.length) line(files, "Chưa có tệp đính kèm.", "list-group-item small text-muted");
+                    attachments.forEach(file => {
+                        const row = document.createElement("div"); row.className = "list-group-item d-flex flex-wrap align-items-center justify-content-between gap-2 px-0";
+                        const details = document.createElement("span"); details.className = "small";
+                        details.textContent = `${file.name || file.file_name} · ${formatFileSize(Number(file.size || file.file_size || 0))}`;
+                        const download = document.createElement("button"); download.type = "button"; download.className = "btn btn-sm btn-outline-secondary"; download.textContent = "Tải xuống";
+                        download.addEventListener("click", async () => { download.disabled = true; try { await openConferenceAttachment(file); } catch (error) { feedback.className = "small text-danger d-block mt-2"; feedback.textContent = error.message; } finally { download.disabled = false; } });
+                        const replaceInput = document.createElement("input"); replaceInput.type = "file"; replaceInput.hidden = true; replaceInput.setAttribute("aria-label", `Chọn tệp thay thế cho ${file.name || file.file_name}`);
+                        const replace = document.createElement("button"); replace.type = "button"; replace.className = "btn btn-sm btn-outline-warning"; replace.textContent = "Thay thế tệp";
+                        replace.addEventListener("click", () => replaceInput.click());
+                        replaceInput.addEventListener("change", async () => {
+                            const selected = replaceInput.files?.[0]; if (!selected) return;
+                            if (selected.size > 20 * 1024 * 1024) { feedback.className = "small text-danger d-block mt-2"; feedback.textContent = "Tệp vượt quá giới hạn 20 MB."; replaceInput.value = ""; return; }
+                            replace.disabled = true;
+                            try { await replaceTaskAttachment(task.id, file.id, selected); feedback.className = "small text-success d-block mt-2"; feedback.textContent = "Đã thay thế tệp nhiệm vụ."; await showFiles(); }
+                            catch (error) { feedback.className = "small text-danger d-block mt-2"; feedback.textContent = error.message || "Không thay thế được tệp."; }
+                            finally { replace.disabled = false; replaceInput.value = ""; }
+                        });
+                        row.append(details, download, replaceInput, replace); files.appendChild(row);
+                    });
+                } catch (error) { line(files, error.message || "Không tải được danh sách tệp.", "small text-danger"); }
+            };
+            section.appendChild(files);
+            let feedback = document.createElement("div"); feedback.className = "small mt-2"; feedback.setAttribute("role", "status");
+            if (currentUser?.role === "TASK_ASSIGNEE" && String(task.assignee_user_id) === String(currentUser.id) && !["CANCELLED", "COMPLETED"].includes(task.status)) {
+                const form = document.createElement("form"); form.className = "d-flex flex-wrap align-items-center gap-2";
+                const input = document.createElement("input"); input.type = "file"; input.multiple = true; input.className = "form-control form-control-sm"; input.setAttribute("aria-label", "Chọn tệp đính kèm cho nhiệm vụ"); input.style.maxWidth = "480px";
+                const uploadButton = document.createElement("button"); uploadButton.type = "submit"; uploadButton.className = "btn btn-sm btn-outline-primary"; uploadButton.textContent = "Đính kèm tệp";
+                form.append(input, uploadButton);
+                form.addEventListener("submit", async event => {
+                    event.preventDefault();
+                    if (!input.files?.length) { feedback.className = "small text-warning d-block mt-2"; feedback.textContent = "Hãy chọn ít nhất một tệp."; return; }
+                    uploadButton.disabled = true; input.disabled = true; feedback.className = "small text-muted d-block mt-2"; feedback.textContent = "Đang tải tệp lên...";
+                    try {
+                        for (const file of input.files) await uploadTaskAttachment(task.id, file);
+                        feedback.className = "small text-success d-block mt-2"; feedback.textContent = "Đã đính kèm tệp vào nhiệm vụ."; input.value = ""; await showFiles();
+                    } catch (error) { feedback.className = "small text-danger d-block mt-2"; feedback.textContent = error.message || "Không tải được tệp."; }
+                    finally { uploadButton.disabled = false; input.disabled = false; }
+                });
+                section.appendChild(form);
+            }
+            section.appendChild(feedback); card.appendChild(section); await showFiles();
+        }
+        async function appendConferenceAttachments(card, conferenceId) {
+            if (!conferenceId) return;
+            const section = document.createElement("section"); section.className = "border-top mt-3 pt-3";
+            const heading = document.createElement("div"); heading.className = "fw-semibold mb-2"; heading.textContent = "Tài liệu hội nghị"; section.appendChild(heading);
+            const files = document.createElement("div"); files.className = "list-group list-group-flush"; section.appendChild(files);
+            const feedback = document.createElement("div"); feedback.className = "small mt-2"; feedback.setAttribute("role", "status"); section.appendChild(feedback);
+            if (currentUser?.role === "SPEAKER") {
+                const uploadForm = document.createElement("form"); uploadForm.className = "d-flex flex-wrap gap-2 align-items-center mb-2";
+                const uploadInput = document.createElement("input"); uploadInput.type = "file"; uploadInput.multiple = true; uploadInput.className = "form-control form-control-sm"; uploadInput.style.maxWidth = "420px"; uploadInput.setAttribute("aria-label", "Chọn tệp cần đính kèm cho hội nghị");
+                const uploadButton = document.createElement("button"); uploadButton.type = "submit"; uploadButton.className = "btn btn-sm btn-outline-primary"; uploadButton.textContent = "Đính kèm tệp";
+                uploadForm.append(uploadInput, uploadButton); section.appendChild(uploadForm);
+                uploadForm.addEventListener("submit", async event => {
+                    event.preventDefault();
+                    const selectedFiles = Array.from(uploadInput.files || []);
+                    if (!selectedFiles.length) { feedback.className = "small text-warning mt-2"; feedback.textContent = "Hãy chọn ít nhất một tệp."; return; }
+                    const oversized = selectedFiles.find(file => file.size > 20 * 1024 * 1024);
+                    if (oversized) { feedback.className = "small text-danger mt-2"; feedback.textContent = `Tệp “${oversized.name}” vượt quá giới hạn 20 MB.`; return; }
+                    uploadButton.disabled = true; uploadInput.disabled = true; feedback.className = "small text-muted mt-2"; feedback.textContent = "Đang tải tệp lên...";
+                    try {
+                        for (const file of selectedFiles) await uploadConferenceAttachment(conferenceId, file);
+                        uploadInput.value = ""; feedback.className = "small text-success mt-2"; feedback.textContent = "Đã đính kèm tệp vào hội nghị.";
+                        await loadAssignments();
+                    } catch (error) { feedback.className = "small text-danger mt-2"; feedback.textContent = error.message || "Không tải được tệp."; }
+                    finally { uploadButton.disabled = false; uploadInput.disabled = false; }
+                });
+            }
+            card.appendChild(section);
+            try {
+                const attachments = await getConferenceAttachments(conferenceId);
+                if (!attachments.length) line(files, "Chưa có tài liệu hội nghị đính kèm.", "list-group-item small text-muted");
+                attachments.forEach(file => {
+                    const row = document.createElement("div"); row.className = "list-group-item d-flex flex-wrap align-items-center justify-content-between gap-2 px-0";
+                    const details = document.createElement("span"); details.className = "small"; details.textContent = `${file.name || file.file_name} · ${formatFileSize(Number(file.size || file.file_size || 0))}`;
+                    const actions = document.createElement("div"); actions.className = "d-flex flex-wrap gap-2";
+                    const download = document.createElement("button"); download.type = "button"; download.className = "btn btn-sm btn-outline-secondary"; download.textContent = "Tải xuống";
+                    download.addEventListener("click", async () => { download.disabled = true; try { await openConferenceAttachment(file); } catch (error) { feedback.className = "small text-danger mt-2"; feedback.textContent = error.message; } finally { download.disabled = false; } });
+                    actions.append(download);
+                    if (String(file.uploaded_by) === String(currentUser?.id)) {
+                        const replaceInput = document.createElement("input"); replaceInput.type = "file"; replaceInput.hidden = true; replaceInput.setAttribute("aria-label", `Chọn tệp thay thế cho ${file.name || file.file_name}`);
+                        const replace = document.createElement("button"); replace.type = "button"; replace.className = "btn btn-sm btn-outline-warning"; replace.textContent = "Thay thế tệp";
+                        replace.addEventListener("click", () => replaceInput.click());
+                        replaceInput.addEventListener("change", async () => {
+                            const selected = replaceInput.files?.[0]; if (!selected) return;
+                            if (selected.size > 20 * 1024 * 1024) { feedback.className = "small text-danger mt-2"; feedback.textContent = "Tệp vượt quá giới hạn 20 MB."; replaceInput.value = ""; return; }
+                            replace.disabled = true;
+                            try { await replaceConferenceAttachment(conferenceId, file.id, selected); feedback.className = "small text-success mt-2"; feedback.textContent = "Đã thay thế tài liệu hội nghị."; await loadAssignments(); }
+                            catch (error) { feedback.className = "small text-danger mt-2"; feedback.textContent = error.message || "Không thay thế được tệp."; }
+                            finally { replace.disabled = false; replaceInput.value = ""; }
+                        });
+                        actions.append(replaceInput, replace);
+                    }
+                    row.append(details, actions); files.appendChild(row);
+                });
+            } catch (error) { line(files, error.message || "Không tải được danh sách tài liệu hội nghị.", "small text-danger"); }
+        }
+        async function loadAssignments() {
+            const message = document.getElementById("message"); message.hidden = true;
+            try {
+                const result = await getMyAssignments();
+                const tasks = result.data?.tasks || [];
+                const speakers = result.data?.speakers || [];
+                let requests = [];
+                let changeRequestServiceAvailable = true;
+                try {
+                    const requestResult = await getMyStaffChangeRequests();
+                    requests = requestResult.data || [];
+                    message.hidden = true;
+                } catch (requestError) {
+                    changeRequestServiceAvailable = false;
+                    message.className = "alert alert-warning";
+                    message.textContent = "Chưa tải được trạng thái đề nghị đổi cán bộ. Để tránh cập nhật không đúng, tạm thời không thể chuyển nhiệm vụ sang hoàn thành.";
+                    message.hidden = false;
+                }
+                document.getElementById("taskCount").textContent = tasks.length;
+                document.getElementById("speakerCount").textContent = speakers.length;
+                const taskList = document.getElementById("taskList"); taskList.replaceChildren();
+                if (!tasks.length) line(taskList, "Chưa có nhiệm vụ nào được giao.", "text-muted");
+                for (const task of tasks) {
+                    const card = document.createElement("article"); card.className = "border rounded p-3 mb-3";
+                    if (String(task.assignee_user_id) === String(currentUser?.id)) card.id = `TASK-${task.id}`;
+                    line(card, task.title, "fw-semibold");
+                    line(card, conferenceInfo(task), "small text-muted");
+                    line(card, `Địa điểm: ${task.location_name || "Chưa xác định"} · Thời gian: ${dateTime(task.start_time)}`, "small");
+                    line(card, `Người nhận: ${task.assignee_name}${task.assignee_organization ? ` · ${task.assignee_organization}` : ""}`, "small");
+                    if (task.description) line(card, task.description, "mt-2");
+                    const status = { ASSIGNED: "Đã giao", IN_PROGRESS: "Đang thực hiện", COMPLETED: "Hoàn thành", CANCELLED: "Đã hủy" };
+                    const statusLine = line(card, `Trạng thái: ${status[task.status] || task.status}${task.due_at ? ` · Hạn: ${dateTime(task.due_at)}` : ""}`, "small mt-2");
+                    if (currentUser?.role === "TASK_ASSIGNEE" && String(task.assignee_user_id) === String(currentUser.id) && task.status !== "CANCELLED" && task.status !== "COMPLETED") {
+                        const hasPendingChange = requests.some(request => request.request_type === "TASK" && String(request.task_assignment_id) === String(task.id) && request.status === "PENDING");
+                        const controls = document.createElement("div"); controls.className = "mt-2 d-flex gap-2";
+                        const select = document.createElement("select"); select.className = "form-select form-select-sm"; select.style.maxWidth = "200px";
+                        const statusOptions = [["IN_PROGRESS", "Đang thực hiện"]];
+                        if (changeRequestServiceAvailable && !hasPendingChange) statusOptions.push(["COMPLETED", "Hoàn thành"]);
+                        statusOptions.forEach(([value, label]) => { const option = document.createElement("option"); option.value = value; option.textContent = label; select.appendChild(option); });
+                        if (task.status === "IN_PROGRESS") select.value = "IN_PROGRESS";
+                        const save = document.createElement("button"); save.type = "button"; save.className = "btn btn-sm btn-outline-primary"; save.textContent = "Cập nhật tiến độ";
+                        save.addEventListener("click", async () => { save.disabled = true; try { await updateMyTaskStatus(task.id, select.value); await loadAssignments(); } catch (error) { message.textContent = error.message; message.hidden = false; save.disabled = false; } });
+                        controls.append(select, save); card.appendChild(controls);
+                        if (hasPendingChange) line(card, "Đề nghị đổi cán bộ đang chờ admin xử lý; chưa thể đánh dấu nhiệm vụ hoàn thành.", "small text-warning mt-2");
+                        else if (!changeRequestServiceAvailable) line(card, "Chưa kiểm tra được đề nghị đổi cán bộ; lựa chọn hoàn thành tạm thời bị khóa.", "small text-warning mt-2");
+                        appendChangeRequest(card, "TASK", task.id, requests, changeRequestServiceAvailable);
+                    }
+                    if (currentUser?.role === "TASK_ASSIGNEE" && String(task.assignee_user_id) === String(currentUser.id)) {
+                        await appendTaskAttachments(card, task);
+                        await appendConferenceAttachments(card, task.conference_id);
+                    }
+                    taskList.appendChild(card);
+                }
+                const speakerList = document.getElementById("speakerList"); speakerList.replaceChildren();
+                if (!speakers.length) line(speakerList, "Chưa có báo cáo viên được phân công.", "text-muted");
+                for (const speaker of speakers) {
+                    const card = document.createElement("article"); card.className = "border rounded p-3 mb-3";
+                    if (String(speaker.speaker_user_id) === String(currentUser?.id)) card.id = `SPEAKER-${speaker.id}`;
+                    line(card, `${speaker.speaking_order}. ${speaker.full_name}${speaker.role_title ? ` · ${speaker.role_title}` : ""}`, "fw-semibold");
+                    line(card, conferenceInfo(speaker), "small text-muted");
+                    line(card, `Chuyên đề: ${speaker.presentation_title} · ${speaker.duration_minutes} phút`, "small");
+                    line(card, `Địa điểm: ${speaker.location_name || "Chưa xác định"} · Thời gian: ${dateTime(speaker.start_time)}`, "small");
+                    line(card, `Báo cáo viên: ${speaker.full_name}${speaker.organization ? ` · ${speaker.organization}` : ""}`, "small");
+                    if (speaker.notes) line(card, speaker.notes, "mt-2");
+                    if (currentUser?.role === "SPEAKER" && String(speaker.speaker_user_id) === String(currentUser.id)) {
+                        appendChangeRequest(card, "SPEAKER", speaker.id, requests, changeRequestServiceAvailable);
+                        await appendConferenceAttachments(card, speaker.conference_id);
+                    }
+                    speakerList.appendChild(card);
+                }
+                renderStaffNotifications(tasks, speakers);
+            } catch (error) { message.textContent = error.message || "Không tải được danh sách phân công."; message.hidden = false; }
+        }
+        document.addEventListener("DOMContentLoaded", () => {
+            if (currentUser) document.getElementById("welcome").textContent = `Xin chào ${currentUser.full_name || currentUser.username} · Phân công hội nghị`;
+            loadAssignments();
+        });
+    </script>
+</body>
+</html>

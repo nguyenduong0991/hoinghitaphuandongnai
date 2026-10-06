@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Báo cáo phân công · TGPL Đồng Nai</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+    <nav class="navbar navbar-dark bg-primary"><div class="container-fluid">
+        <span class="navbar-brand mb-0 h1">Báo cáo – thống kê phân công</span>
+        <a href="index.html" class="btn btn-light btn-sm">Dashboard</a>
+    </div></nav>
+    <main class="container-fluid py-4">
+        <div class="d-flex flex-wrap justify-content-between align-items-end gap-3 mb-3">
+            <div><h2 class="mb-1">Nhiệm vụ theo người nhận</h2><p class="text-muted mb-0">Tổng hợp theo ngày bắt đầu hội nghị; admin có thể xem từng nhiệm vụ và đánh giá kết quả nhiệm vụ đã hoàn thành.</p></div>
+            <form id="filterForm" class="d-flex flex-wrap align-items-end gap-2 admin-only">
+                <div><label for="fromDate" class="form-label mb-1">Từ ngày</label><input id="fromDate" type="date" class="form-control" required></div>
+                <div><label for="toDate" class="form-label mb-1">Đến ngày</label><input id="toDate" type="date" class="form-control" required></div>
+                <button type="submit" class="btn btn-primary"><i class="bi bi-arrow-repeat me-1"></i>Cập nhật</button>
+            </form>
+        </div>
+        <div id="reportMessage" class="alert" hidden role="status"></div>
+        <section id="staff-change-requests" class="card mb-4 admin-only" aria-labelledby="changeRequestsHeading">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <strong id="changeRequestsHeading">Đề nghị đổi cán bộ</strong>
+                <span id="changeRequestCount" class="badge text-bg-warning">0 chờ xử lý</span>
+            </div>
+            <div id="changeRequestsList" class="card-body"><span class="text-muted">Đang tải đề nghị...</span></div>
+        </section>
+        <div class="row g-3 mb-4">
+            <div class="col-sm-6 col-xl"><div class="card h-100"><div class="card-body"><div class="text-muted">Tổng nhiệm vụ</div><div id="taskTotal" class="display-6">—</div></div></div></div>
+            <div class="col-sm-6 col-xl"><div class="card h-100"><div class="card-body"><div class="text-muted">Đang thực hiện</div><div id="taskInProgress" class="display-6 text-primary">—</div></div></div></div>
+            <div class="col-sm-6 col-xl"><div class="card h-100"><div class="card-body"><div class="text-muted">Đã hoàn thành</div><div id="taskCompleted" class="display-6 text-success">—</div></div></div></div>
+            <div class="col-sm-6 col-xl"><div class="card h-100"><div class="card-body"><div class="text-muted">Người nhận nhiệm vụ</div><div id="assigneeTotal" class="display-6">—</div></div></div></div>
+            <div class="col-sm-6 col-xl"><div class="card h-100"><div class="card-body"><div class="text-muted">Lượt báo cáo viên</div><div id="speakerSessions" class="display-6 text-success">—</div></div></div></div>
+        </div>
+        <section class="card mb-4"><div class="card-header fw-semibold">Kết quả theo từng tài khoản nhận nhiệm vụ</div><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th>Người nhận</th><th>Đơn vị</th><th>Tổng</th><th>Đã giao</th><th>Đang làm</th><th>Hoàn thành</th><th>Đã hủy</th><th>Đánh giá TB</th><th>Đã đánh giá</th><th>Chi tiết</th></tr></thead><tbody id="taskRows"></tbody></table></div><div class="card-footer small text-muted">Chọn “Xem nhiệm vụ” để đánh giá từng nhiệm vụ đã hoàn thành. Mức đánh giá từ 1 (chưa đạt) đến 5 (xuất sắc), kèm nhận xét nếu cần.</div></section>
+        <section class="card"><div class="card-header fw-semibold">Báo cáo viên (chỉ thống kê, không đánh giá)</div><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th>Báo cáo viên</th><th>Đơn vị</th><th>Lượt phân công</th><th>Số hội nghị</th><th>Chuyên đề</th></tr></thead><tbody id="speakerRows"></tbody></table></div></section>
+        <p class="small text-muted mt-3 mb-0">Trang báo cáo này chỉ dành cho quản trị viên. Chức năng đánh giá chỉ áp dụng cho người nhận nhiệm vụ; báo cáo viên chỉ được thống kê lượt phân công và chuyên đề.</p>
+    </main>
+    <script src="assets/js/config.js?v=20261004-tunnel-2"></script>
+    <script src="assets/js/api.js?v=20261006-task-evaluation-1"></script>
+    <script src="assets/js/auth.js?v=20261005-change-request-1"></script>
+    <script>
+        const form = document.getElementById("filterForm");
+        const message = document.getElementById("reportMessage");
+        const today = new Date();
+        const dateValue = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+        document.getElementById("fromDate").value = `${today.getFullYear()}-01-01`;
+        document.getElementById("toDate").value = dateValue(today);
+        function setRows(body, rows, columns) {
+            body.replaceChildren();
+            if (!rows.length) { const tr = body.insertRow(); const td = tr.insertCell(); td.colSpan = columns.length; td.className = "text-muted text-center py-3"; td.textContent = "Không có dữ liệu trong khoảng thời gian này."; return; }
+            rows.forEach(item => { const tr = body.insertRow(); columns.forEach(key => { const td = tr.insertCell(); td.textContent = item[key] ?? "—"; }); });
+        }
+        function addText(parent, value, className = "") { const element = document.createElement("div"); element.className = className; element.textContent = value || "—"; parent.appendChild(element); return element; }
+        const taskStatusLabels = { ASSIGNED: "Đã giao", IN_PROGRESS: "Đang thực hiện", COMPLETED: "Hoàn thành", CANCELLED: "Đã hủy" };
+        const evaluationLabels = { 1: "Chưa đạt", 2: "Cần cải thiện", 3: "Đạt", 4: "Tốt", 5: "Xuất sắc" };
+        const reportDateTime = value => value ? new Date(value).toLocaleString("vi-VN", { dateStyle: "medium", timeStyle: "short" }) : "Chưa xác định";
+
+        function renderTaskDetails(container, tasks) {
+            container.replaceChildren();
+            if (!tasks.length) { addText(container, "Không có nhiệm vụ của tài khoản trong kỳ.", "small text-muted"); return; }
+            tasks.forEach(task => {
+                const card = document.createElement("article"); card.className = "border rounded p-3 mb-3";
+                addText(card, task.title, "fw-semibold");
+                addText(card, `${task.conference_code || ""} · ${task.conference_title || "Hội nghị"} · ${reportDateTime(task.start_time)}`, "small text-muted");
+                addText(card, `Trạng thái: ${taskStatusLabels[task.status] || task.status}${task.due_at ? ` · Hạn: ${reportDateTime(task.due_at)}` : ""}`, "small mt-1");
+                if (task.description) addText(card, task.description, "small mt-2");
+                if (task.evaluation_rating) addText(card, `Đánh giá hiện tại: ${task.evaluation_rating}/5 · ${evaluationLabels[task.evaluation_rating]}${task.evaluated_at ? ` · ${reportDateTime(task.evaluated_at)} bởi ${task.evaluator_name || "admin"}` : ""}`, "small text-success mt-2");
+                if (task.evaluation_note) addText(card, `Nhận xét: ${task.evaluation_note}`, "small mt-1");
+
+                const form = document.createElement("form"); form.className = "row g-2 align-items-end mt-1";
+                const ratingCol = document.createElement("div"); ratingCol.className = "col-md-4";
+                const ratingLabel = document.createElement("label"); ratingLabel.className = "form-label"; ratingLabel.textContent = "Đánh giá kết quả";
+                const rating = document.createElement("select"); rating.className = "form-select"; rating.required = true; rating.disabled = task.status !== "COMPLETED";
+                const placeholder = document.createElement("option"); placeholder.value = ""; placeholder.textContent = "Chọn mức từ 1 đến 5"; rating.appendChild(placeholder);
+                Object.entries(evaluationLabels).forEach(([score, label]) => { const option = document.createElement("option"); option.value = score; option.textContent = `${score} · ${label}`; rating.appendChild(option); });
+                if (task.evaluation_rating) rating.value = String(task.evaluation_rating);
+                ratingCol.append(ratingLabel, rating);
+                const noteCol = document.createElement("div"); noteCol.className = "col-md-6";
+                const noteLabel = document.createElement("label"); noteLabel.className = "form-label"; noteLabel.textContent = "Nhận xét của admin";
+                const note = document.createElement("textarea"); note.className = "form-control"; note.rows = 1; note.maxLength = 2000; note.value = task.evaluation_note || ""; note.disabled = task.status !== "COMPLETED";
+                noteCol.append(noteLabel, note);
+                const actionCol = document.createElement("div"); actionCol.className = "col-md-2 d-grid";
+                const save = document.createElement("button"); save.type = "submit"; save.className = "btn btn-primary"; save.textContent = task.evaluation_rating ? "Cập nhật đánh giá" : "Lưu đánh giá"; save.disabled = task.status !== "COMPLETED";
+                actionCol.appendChild(save); form.append(ratingCol, noteCol, actionCol);
+                const feedback = document.createElement("div"); feedback.className = "small mt-2"; feedback.setAttribute("role", "status");
+                form.addEventListener("submit", async event => {
+                    event.preventDefault(); if (!rating.value) return;
+                    save.disabled = true; feedback.className = "small text-muted mt-2"; feedback.textContent = "Đang lưu đánh giá...";
+                    try {
+                        await saveTaskEvaluation(task.id, rating.value, note.value.trim());
+                        feedback.className = "small text-success mt-2"; feedback.textContent = "Đã lưu đánh giá nhiệm vụ.";
+                        await loadReport();
+                    } catch (error) { feedback.className = "small text-danger mt-2"; feedback.textContent = error.message || "Không lưu được đánh giá."; save.disabled = false; }
+                });
+                card.append(form, feedback);
+                if (task.status !== "COMPLETED") addText(card, "Chỉ có thể đánh giá sau khi nhiệm vụ được cập nhật là hoàn thành.", "small text-warning mt-2");
+                container.appendChild(card);
+            });
+        }
+
+        function renderTaskPeople(body, people, tasks) {
+            body.replaceChildren();
+            if (!people.length) { const tr = body.insertRow(); const td = tr.insertCell(); td.colSpan = 10; td.className = "text-muted text-center py-3"; td.textContent = "Không có dữ liệu trong khoảng thời gian này."; return; }
+            people.forEach(person => {
+                const tr = body.insertRow();
+                ["person_name","organization_name","task_count","assigned_count","in_progress_count","completed_count","cancelled_count"].forEach(key => { const cell = tr.insertCell(); cell.textContent = person[key] ?? "—"; });
+                const average = tr.insertCell(); average.textContent = person.average_rating == null ? "—" : `${Number(person.average_rating).toLocaleString("vi-VN", { maximumFractionDigits: 2 })}/5`;
+                const evaluated = tr.insertCell(); evaluated.textContent = person.evaluated_count ?? 0;
+                const actionCell = tr.insertCell();
+                const detailRow = body.insertRow(); detailRow.hidden = true;
+                const detailCell = detailRow.insertCell(); detailCell.colSpan = 10; detailCell.className = "bg-light p-3";
+                const detailContainer = document.createElement("div"); detailCell.appendChild(detailContainer);
+                const personTasks = tasks.filter(task => person.assignee_user_id
+                    ? String(task.assignee_user_id) === String(person.assignee_user_id)
+                    : !task.assignee_user_id && task.person_name === person.person_name);
+                const toggle = document.createElement("button"); toggle.type = "button"; toggle.className = "btn btn-sm btn-outline-primary"; toggle.textContent = "Xem nhiệm vụ";
+                toggle.addEventListener("click", () => {
+                    detailRow.hidden = !detailRow.hidden;
+                    toggle.textContent = detailRow.hidden ? "Xem nhiệm vụ" : "Thu gọn";
+                    if (!detailRow.hidden && !detailContainer.childElementCount) renderTaskDetails(detailContainer, personTasks);
+                });
+                actionCell.appendChild(toggle);
+            });
+        }
+        async function loadChangeRequests() {
+            const container = document.getElementById("changeRequestsList");
+            const badge = document.getElementById("changeRequestCount");
+            try {
+                const [requestResult, userResult] = await Promise.all([getStaffChangeRequests(), getUsers()]);
+                const requests = requestResult.data || [];
+                const users = (userResult.data || []).filter(user => user.is_active);
+                const pendingCount = requests.filter(request => request.status === "PENDING").length;
+                badge.textContent = `${pendingCount} chờ xử lý`;
+                container.replaceChildren();
+                if (!requests.length) { addText(container, "Chưa có đề nghị đổi cán bộ.", "text-muted"); return; }
+                requests.forEach(request => {
+                    const card = document.createElement("article"); card.className = "border rounded p-3 mb-3";
+                    const roleName = request.request_type === "TASK" ? "Người nhận nhiệm vụ" : "Báo cáo viên";
+                    addText(card, `${request.assignment_title || roleName} · ${request.conference_title || "Hội nghị"}`, "fw-semibold");
+                    addText(card, `Người đề nghị: ${request.requester_name} (${request.requester_username}) · Cán bộ hiện tại: ${request.current_user_name || "Chưa gán"} · ${request.organization_name || "Chưa rõ đơn vị"}`, "small text-muted");
+                    addText(card, `Lý do: ${request.reason}`, "mt-2");
+                    if (request.status !== "PENDING") {
+                        const statusName = request.status === "APPROVED" ? "Đã duyệt và đã đổi cán bộ" : "Đã từ chối";
+                        addText(card, `${statusName}${request.admin_note ? ` · Ý kiến admin: ${request.admin_note}` : ""}`, request.status === "APPROVED" ? "small text-success mt-2" : "small text-secondary mt-2");
+                    } else {
+                        const form = document.createElement("form"); form.className = "row g-2 mt-2 align-items-end";
+                        const personCol = document.createElement("div"); personCol.className = "col-md-5";
+                        const label = document.createElement("label"); label.className = "form-label"; label.textContent = `Cán bộ thay thế (${roleName})`;
+                        const select = document.createElement("select"); select.className = "form-select"; select.required = true;
+                        const placeholder = document.createElement("option"); placeholder.value = ""; placeholder.textContent = "Chọn cán bộ thay thế"; select.appendChild(placeholder);
+                        const expectedRole = request.request_type === "TASK" ? "TASK_ASSIGNEE" : "SPEAKER";
+                        users.filter(user => user.role === expectedRole && String(user.id) !== String(request.current_user_id)).forEach(user => {
+                            const option = document.createElement("option"); option.value = user.id; option.textContent = `${user.full_name} · ${user.username}${user.organization_name ? ` · ${user.organization_name}` : ""}`; select.appendChild(option);
+                        });
+                        personCol.append(label, select);
+                        const noteCol = document.createElement("div"); noteCol.className = "col-md-4";
+                        const noteLabel = document.createElement("label"); noteLabel.className = "form-label"; noteLabel.textContent = "Ý kiến xử lý (không bắt buộc)";
+                        const note = document.createElement("input"); note.className = "form-control"; note.maxLength = 2000; noteCol.append(noteLabel, note);
+                        const actions = document.createElement("div"); actions.className = "col-md-3 d-flex gap-2";
+                        const approve = document.createElement("button"); approve.type = "button"; approve.className = "btn btn-success flex-fill"; approve.textContent = "Duyệt đổi";
+                        const reject = document.createElement("button"); reject.type = "button"; reject.className = "btn btn-outline-danger flex-fill"; reject.textContent = "Từ chối";
+                        const resultMessage = document.createElement("div"); resultMessage.className = "col-12 small"; resultMessage.setAttribute("role", "status");
+                        approve.addEventListener("click", async () => {
+                            if (!select.value) { resultMessage.className = "col-12 small text-danger"; resultMessage.textContent = "Chọn cán bộ thay thế trước khi duyệt."; select.focus(); return; }
+                            approve.disabled = true; reject.disabled = true;
+                            try { await reviewStaffChangeRequest(request.id, { status: "APPROVED", replacement_user_id: select.value, admin_note: note.value.trim() }); await loadChangeRequests(); }
+                            catch (error) { resultMessage.className = "col-12 small text-danger"; resultMessage.textContent = error.message || "Không duyệt được đề nghị."; approve.disabled = false; reject.disabled = false; }
+                        });
+                        reject.addEventListener("click", async () => {
+                            approve.disabled = true; reject.disabled = true;
+                            try { await reviewStaffChangeRequest(request.id, { status: "REJECTED", admin_note: note.value.trim() }); await loadChangeRequests(); }
+                            catch (error) { resultMessage.className = "col-12 small text-danger"; resultMessage.textContent = error.message || "Không từ chối được đề nghị."; approve.disabled = false; reject.disabled = false; }
+                        });
+                        actions.append(approve, reject); form.append(personCol, noteCol, actions, resultMessage); card.appendChild(form);
+                    }
+                    container.appendChild(card);
+                });
+            } catch (error) { container.replaceChildren(); addText(container, error.message || "Không tải được đề nghị đổi cán bộ.", "text-danger"); }
+        }
+        async function loadReport(event) {
+            event?.preventDefault();
+            message.hidden = true;
+            const submit = form.querySelector('button[type="submit"]'); submit.disabled = true;
+            try {
+                const result = await getAssignmentReports({ from: document.getElementById("fromDate").value, to: document.getElementById("toDate").value });
+                const data = result.data || {}; const summary = data.summary || {};
+                document.getElementById("taskTotal").textContent = Number(summary.task_count || 0).toLocaleString("vi-VN");
+                document.getElementById("taskInProgress").textContent = Number(summary.in_progress_count || 0).toLocaleString("vi-VN");
+                document.getElementById("taskCompleted").textContent = Number(summary.completed_count || 0).toLocaleString("vi-VN");
+                document.getElementById("assigneeTotal").textContent = Number(summary.assigned_people || 0).toLocaleString("vi-VN");
+                document.getElementById("speakerSessions").textContent = Number(summary.speaker_sessions || 0).toLocaleString("vi-VN");
+                renderTaskPeople(document.getElementById("taskRows"), data.tasks_by_person || [], data.task_details || []);
+                setRows(document.getElementById("speakerRows"), data.speakers_by_person || [], ["person_name","organization_name","session_count","conference_count","topics"]);
+            } catch (error) { message.className = "alert alert-danger"; message.textContent = error.message || "Không tải được báo cáo phân công."; message.hidden = false; }
+            finally { submit.disabled = false; }
+        }
+        form.addEventListener("submit", loadReport);
+        loadChangeRequests();
+        loadReport();
+    </script>
+</body>
+</html>

@@ -88,6 +88,16 @@ body {
 .report-total { display: block; margin-top: 7px; color: rgba(255,255,255,.68); font-size: .78rem; }
 .report-footnote { margin-top: 15px; color: rgba(255,255,255,.72); font-size: .78rem; }
 .section-label { color: #435168; font-size: 1rem; font-weight: 700; }
+.topic-suggestions { padding: 22px; border: 1px solid #e6edf5; border-radius: 16px; background: linear-gradient(145deg, #f7fbff 0%, #fff 62%, #f5fbfa 100%); box-shadow: 0 10px 26px rgba(21, 46, 80, .06); }
+.topic-suggestions-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.topic-eyebrow { display: inline-block; margin-bottom: 5px; color: #147b87; font-size: .72rem; letter-spacing: .12em; font-weight: 800; }
+.topic-suggestions-heading h3 { margin: 0 0 4px; color: #183b60; font-size: 1.35rem; font-weight: 750; }
+.topic-suggestions-heading p { color: #66778b; font-size: .9rem; }
+.topic-card { display: flex; align-items: flex-start; gap: 14px; height: 100%; min-height: 108px; padding: 18px; border: 1px solid #e5edf5; border-radius: 12px; background: #fff; transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease; }
+.topic-card:hover { transform: translateY(-2px); border-color: #b8d6e7; box-shadow: 0 8px 20px rgba(21, 75, 115, .08); }
+.topic-number { display: inline-flex; flex: 0 0 42px; width: 42px; height: 42px; align-items: center; justify-content: center; border-radius: 12px; color: #116c78; background: #e5f5f4; font-size: .9rem; font-weight: 800; }
+.topic-card h4 { margin: 1px 0 6px; color: #233e5c; font-size: 1rem; line-height: 1.4; font-weight: 700; }
+.topic-card p { margin: 0; color: #6a7888; font-size: .88rem; line-height: 1.5; }
 .report-period-controls { background: #fff; border: 1px solid #e5eaf0; border-radius: 12px; padding: 12px; }
 
 .card {
@@ -106,6 +116,7 @@ body {
     .report-highlight { padding: 17px; }
     .report-heading { display: block; }
     .report-updated { display: block; padding-top: 5px; }
+    .topic-suggestions { padding: 17px; }
     .sidebar {
         width: 100%;
         height: auto;

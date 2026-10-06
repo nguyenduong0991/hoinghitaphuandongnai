@@ -61,6 +61,18 @@
 
         </div>
 
+        <section id="upcomingConferencesCard" class="card border-primary mb-4" aria-labelledby="upcomingConferencesHeading">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <strong id="upcomingConferencesHeading">Hội nghị sắp diễn ra</strong>
+                <span id="upcomingConferenceCount" class="badge bg-light text-primary">0</span>
+            </div>
+            <div class="card-body p-0">
+                <div id="upcomingConferencesList" class="list-group list-group-flush">
+                    <div class="list-group-item text-muted">Đang tải danh sách...</div>
+                </div>
+            </div>
+        </section>
+
 
         <!-- THÔNG BÁO -->
         <div id="connectionError"
@@ -255,9 +267,9 @@
     <!-- JAVASCRIPT -->
 
     <script src="assets/js/config.js?v=20261004-tunnel-2"></script>
-    <script src="assets/js/api.js?v=20261003-unit-scope-1"></script>
-    <script src="assets/js/attachments.js?v=20261003-3"></script>
-    <script src="assets/js/auth.js"></script>
+    <script src="assets/js/api.js?v=20261006-approved-date-block-1"></script>
+    <script src="assets/js/attachments.js?v=20261005-attachment-management-2"></script>
+    <script src="assets/js/auth.js?v=20261004-deadline-1"></script>
 
 
     <script>
@@ -327,6 +339,8 @@
         function renderConferences(
             conferences
         ) {
+
+            renderUpcomingConferences(allConferences);
 
             const tableBody =
                 document.getElementById(
@@ -476,6 +490,46 @@
 
         }
 
+        function renderUpcomingConferences(conferences) {
+            const list = document.getElementById("upcomingConferencesList");
+            const count = document.getElementById("upcomingConferenceCount");
+            if (!list || !count) return;
+
+            const now = Date.now();
+            const upcoming = conferences
+                .filter(item => item.status === "APPROVED" && item.start_time && new Date(item.start_time).getTime() >= now)
+                .sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
+
+            count.textContent = String(upcoming.length);
+            list.replaceChildren();
+            if (!upcoming.length) {
+                const empty = document.createElement("div");
+                empty.className = "list-group-item text-muted";
+                empty.textContent = "Chưa có hội nghị đã phê duyệt sắp diễn ra.";
+                list.appendChild(empty);
+                return;
+            }
+
+            upcoming.forEach(item => {
+                const row = document.createElement("div");
+                row.className = "list-group-item d-flex flex-wrap justify-content-between align-items-center gap-2";
+                const details = document.createElement("div");
+                const title = document.createElement("div");
+                title.className = "fw-semibold";
+                title.textContent = item.title || "Chưa có chủ đề";
+                const meta = document.createElement("div");
+                meta.className = "small text-muted";
+                meta.textContent = `${formatDateTime(item.start_time)} · ${item.location_name || item.location_address || "Chưa cập nhật địa điểm"} · ${item.organization_name || ""}`;
+                details.append(title, meta);
+                const link = document.createElement("a");
+                link.className = "btn btn-sm btn-outline-primary";
+                link.href = `conference-list.html?id=${encodeURIComponent(item.id)}`;
+                link.textContent = "Chi tiết";
+                row.append(details, link);
+                list.appendChild(row);
+            });
+        }
+
         async function loadConferenceDetailFromUrl() {
             const id = new URLSearchParams(window.location.search).get("id");
             if (!id) return;
@@ -502,6 +556,7 @@
                         <div class="col-md-6"><small class="text-muted">Bắt đầu</small><div id="conferenceStartTime">${escapeHtml(formatDateTime(item.start_time))}</div></div>
                         <div class="col-md-6"><small class="text-muted">Kết thúc</small><div id="conferenceEndTime">${escapeHtml(formatDateTime(item.end_time))}</div></div>
                         <div id="rescheduleProposalDisplay" class="col-12 alert alert-info mb-0" ${item.proposed_start_time ? "" : "hidden"}><strong>Thời gian đề xuất dời:</strong> <span id="rescheduleProposalText">${item.proposed_start_time ? `${escapeHtml(formatDateTime(item.proposed_start_time))} – ${escapeHtml(formatDateTime(item.proposed_end_time))}${item.reschedule_note ? ` · ${escapeHtml(item.reschedule_note)}` : ""}` : ""}</span></div>
+                        <div class="col-12 alert ${item.reschedule_response === "DECLINED" ? "alert-warning" : "alert-success"} mb-0" ${item.reschedule_response ? "" : "hidden"}><strong>Phản hồi dời lịch:</strong> ${item.reschedule_response === "ACCEPTED" ? "Đơn vị đã chấp thuận lịch mới." : item.reschedule_response === "DECLINED" ? "Đơn vị đã từ chối lịch mới; cần trao đổi hoặc đề xuất lại." : "Đang chờ đơn vị phản hồi."}</div>
                         <div id="scheduleConflictPanel" class="col-12 alert alert-info admin-only mb-0" role="status" hidden>Đang kiểm tra lịch trùng...</div>
                         <div class="col-md-6"><small class="text-muted">Lý do từ chối / hủy</small><div>${escapeHtml(item.rejection_reason || item.cancel_reason || "—")}</div></div>
                         <div class="col-md-6"><small class="text-muted">Số người dự kiến</small><div>${escapeHtml(item.expected_participants ?? 0)}</div></div>
@@ -527,8 +582,8 @@
                                     <div id="conferenceAssignments" class="mb-3"><span class="text-muted">Đang tải nhiệm vụ...</span></div>
                                     <form id="assignmentForm" class="row g-2">
                                         <div class="col-lg-4"><label class="form-label" for="assignmentTitle">Nhiệm vụ</label><input id="assignmentTitle" class="form-control" maxlength="200" required></div>
-                                        <div class="col-lg-3"><label class="form-label" for="assignmentAssignee">Người nhận</label><input id="assignmentAssignee" class="form-control" maxlength="200" required></div>
-                                        <div class="col-lg-3"><label class="form-label" for="assignmentOrganization">Đơn vị phối hợp</label><input id="assignmentOrganization" class="form-control" maxlength="255"></div>
+                                        <div class="col-lg-3"><label class="form-label" for="assignmentAssignee">Người nhận</label><select id="assignmentAssignee" class="form-select" required><option value="">Chọn tài khoản nhận nhiệm vụ</option></select></div>
+                                        <div class="col-lg-3"><label class="form-label" for="assignmentOrganization">Đơn vị phối hợp</label><input id="assignmentOrganization" class="form-control" maxlength="255" placeholder="Không bắt buộc"></div>
                                         <div class="col-lg-2"><label class="form-label" for="assignmentDueAt">Hạn hoàn thành</label><input id="assignmentDueAt" type="datetime-local" class="form-control"></div>
                                         <div class="col-lg-9"><label class="form-label" for="assignmentDescription">Mô tả</label><input id="assignmentDescription" class="form-control" maxlength="2000"></div>
                                         <div class="col-lg-3 d-flex align-items-end"><button class="btn btn-primary w-100" type="submit"><i class="bi bi-send me-1"></i>Giao nhiệm vụ</button></div>
@@ -546,7 +601,7 @@
                                 <div class="card-body">
                                     <div id="conferenceSpeakers" class="mb-3"><span class="text-muted">Đang tải báo cáo viên...</span></div>
                                     <form id="speakerForm" class="row g-2">
-                                        <div class="col-lg-3"><label class="form-label" for="speakerName">Họ tên báo cáo viên</label><input id="speakerName" class="form-control" maxlength="200" required></div>
+                                        <div class="col-lg-3"><label class="form-label" for="speakerName">Tài khoản báo cáo viên</label><select id="speakerName" class="form-select" required><option value="">Chọn tài khoản báo cáo viên</option></select></div>
                                         <div class="col-lg-3"><label class="form-label" for="speakerOrganization">Đơn vị</label><input id="speakerOrganization" class="form-control" maxlength="255"></div>
                                         <div class="col-lg-2"><label class="form-label" for="speakerRole">Chức vụ</label><input id="speakerRole" class="form-control" maxlength="160"></div>
                                         <div class="col-lg-4"><label class="form-label" for="speakerTopic">Chuyên đề trình bày</label><input id="speakerTopic" class="form-control" maxlength="255" required></div>
@@ -560,40 +615,45 @@
                             </section>
                         </div>` : ""}
                         <div class="col-12"><small class="text-muted">Lịch sử xử lý</small><div id="statusHistory" class="mt-2"><span class="text-muted">Đang tải...</span></div></div>
-                        <div class="col-12 border-top pt-3 d-flex flex-wrap align-items-end gap-2 admin-only">
+                        ${currentUser?.role === "ADMIN" ? `<div class="col-12 border-top pt-3 d-flex flex-wrap align-items-end gap-2">
                             <div><label for="statusEdit" class="form-label mb-1">Cập nhật trạng thái</label><select id="statusEdit" class="form-select">
                                 <option value="PENDING">Chờ phê duyệt</option><option value="APPROVED">Đã phê duyệt</option><option value="COMPLETED">Hoàn thành</option><option value="REJECTED">Từ chối</option><option value="CANCELLED">Đã hủy</option><option value="RESCHEDULED">Đề xuất dời lịch</option>
                             </select></div>
-                            <div id="rescheduleFields" class="row g-2 w-100 admin-only" hidden>
+                            <div id="rescheduleFields" class="row g-2 w-100" hidden>
                                 <div class="col-md-4"><label for="proposedStartTime" class="form-label">Ngày giờ đề xuất bắt đầu</label><input id="proposedStartTime" type="datetime-local" class="form-control"></div>
                                 <div class="col-md-4"><label for="proposedEndTime" class="form-label">Ngày giờ đề xuất kết thúc</label><input id="proposedEndTime" type="datetime-local" class="form-control"></div>
                                 <div class="col-md-4"><label for="rescheduleNote" class="form-label">Ghi chú đề xuất</label><input id="rescheduleNote" class="form-control" maxlength="1000" placeholder="Ví dụ: chuyển sang buổi chiều"></div>
                             </div>
                             <button id="saveStatus" type="button" class="btn btn-primary">Lưu trạng thái</button>
                             <span id="detailActionMessage" class="small" role="status"></span>
-                        </div>
+                        </div>` : ""}
                     </div>`;
-                if (currentUser?.role !== "ADMIN") body.querySelectorAll(".admin-only").forEach(element => { element.hidden = true; });
-                document.getElementById("statusEdit").value = item.status || "PENDING";
-                const localDateTimeValue = value => {
-                    if (!value) return "";
-                    const date = new Date(value);
-                    if (Number.isNaN(date.getTime())) return "";
-                    const offset = date.getTimezoneOffset() * 60000;
-                    return new Date(date.getTime() - offset).toISOString().slice(0, 16);
-                };
-                document.getElementById("proposedStartTime").value = localDateTimeValue(item.proposed_start_time);
-                document.getElementById("proposedEndTime").value = localDateTimeValue(item.proposed_end_time);
-                document.getElementById("rescheduleNote").value = item.reschedule_note || "";
-                document.getElementById("rescheduleFields").hidden = item.status !== "RESCHEDULED";
-                document.getElementById("statusEdit").addEventListener("change", event => {
-                    document.getElementById("rescheduleFields").hidden = event.target.value !== "RESCHEDULED";
-                });
-                document.getElementById("saveStatus").addEventListener("click", () => saveConferenceStatus(item.id));
+                if (currentUser?.role === "ADMIN") {
+                    document.getElementById("statusEdit").value = item.status || "PENDING";
+                    const localDateTimeValue = value => {
+                        if (!value) return "";
+                        const date = new Date(value);
+                        if (Number.isNaN(date.getTime())) return "";
+                        const offset = date.getTimezoneOffset() * 60000;
+                        return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+                    };
+                    document.getElementById("proposedStartTime").value = localDateTimeValue(item.proposed_start_time);
+                    document.getElementById("proposedEndTime").value = localDateTimeValue(item.proposed_end_time);
+                    const proposedStartInput = document.getElementById("proposedStartTime");
+                    const proposedEndInput = document.getElementById("proposedEndTime");
+                    [proposedStartInput, proposedEndInput].forEach(input => input.addEventListener("change", () => checkProposedDateAvailability(item.id, input)));
+                    document.getElementById("rescheduleNote").value = item.reschedule_note || "";
+                    document.getElementById("rescheduleFields").hidden = item.status !== "RESCHEDULED";
+                    document.getElementById("statusEdit").addEventListener("change", event => {
+                        document.getElementById("rescheduleFields").hidden = event.target.value !== "RESCHEDULED";
+                    });
+                    document.getElementById("saveStatus").addEventListener("click", () => saveConferenceStatus(item.id));
+                }
                 document.getElementById("uploadAttachmentsButton").addEventListener("click", () => addConferenceAttachments(item.id));
                 if (currentUser?.role === "ADMIN") {
                     document.getElementById("assignmentForm").addEventListener("submit", event => createConferenceTask(event, item.id));
                     document.getElementById("speakerForm").addEventListener("submit", event => createConferenceSpeakerEntry(event, item.id));
+                    loadAssignmentAccounts();
                     renderScheduleConflicts(item.id);
                     renderConferenceAssignments(item.id);
                     renderConferenceSpeakers(item.id);
@@ -602,6 +662,29 @@
                 renderStatusHistory(item.id);
             } catch (error) {
                 body.innerHTML = `<div class="alert alert-danger mb-0">${escapeHtml(error.message || "Không tải được chi tiết hội nghị.")}</div>`;
+            }
+        }
+
+        async function loadAssignmentAccounts() {
+            try {
+                const result = await getUsers();
+                const users = (result.data || []).filter(user => user.is_active);
+                const fill = (id, role, placeholder) => {
+                    const select = document.getElementById(id);
+                    if (!select) return;
+                    select.replaceChildren();
+                    const empty = document.createElement("option"); empty.value = ""; empty.textContent = placeholder; select.appendChild(empty);
+                    users.filter(user => user.role === role).forEach(user => {
+                        const option = document.createElement("option"); option.value = user.id;
+                        option.textContent = `${user.full_name} · ${user.username}${user.organization_name ? ` · ${user.organization_name}` : ""}`;
+                        select.appendChild(option);
+                    });
+                    if (select.options.length === 1) select.disabled = true;
+                };
+                fill("assignmentAssignee", "TASK_ASSIGNEE", "Chọn tài khoản nhận nhiệm vụ");
+                fill("speakerName", "SPEAKER", "Chọn tài khoản báo cáo viên");
+            } catch (error) {
+                showAssignmentMessage("assignmentMessage", error.message || "Không tải được danh sách tài khoản.");
             }
         }
 
@@ -700,7 +783,7 @@
             try {
                 await createConferenceAssignment(conferenceId, {
                     title: document.getElementById("assignmentTitle").value.trim(),
-                    assignee_name: document.getElementById("assignmentAssignee").value.trim(),
+                    assignee_user_id: document.getElementById("assignmentAssignee").value,
                     assignee_organization: document.getElementById("assignmentOrganization").value.trim(),
                     description: document.getElementById("assignmentDescription").value.trim(),
                     due_at: due ? new Date(due).toISOString() : null
@@ -725,7 +808,7 @@
                 try { currentUser = JSON.parse(localStorage.getItem("tgpl.user") || "null"); } catch { currentUser = null; }
                 const canManage = currentUser?.role === "ADMIN";
                 const statusLabels = { ASSIGNED: "Đã giao", IN_PROGRESS: "Đang thực hiện", COMPLETED: "Hoàn thành", CANCELLED: "Đã hủy" };
-                assignments.forEach(assignment => {
+                for (const assignment of assignments) {
                     const card = document.createElement("div");
                     card.className = "border rounded p-2 mb-2";
                     const heading = document.createElement("div");
@@ -760,9 +843,10 @@
                             catch (error) { showAssignmentMessage("assignmentMessage", error.message || "Không xóa được nhiệm vụ."); }
                         });
                         controls.append(status, update, remove); card.appendChild(controls);
+                        await appendAdminTaskAttachments(card, assignment);
                     }
                     container.appendChild(card);
-                });
+                }
             } catch (error) { container.textContent = error.message || "Không tải được danh sách nhiệm vụ."; }
         }
 
@@ -773,7 +857,7 @@
             button.disabled = true;
             try {
                 await createConferenceSpeaker(conferenceId, {
-                    full_name: document.getElementById("speakerName").value.trim(),
+                    speaker_user_id: document.getElementById("speakerName").value,
                     organization: document.getElementById("speakerOrganization").value.trim(),
                     role_title: document.getElementById("speakerRole").value.trim(),
                     presentation_title: document.getElementById("speakerTopic").value.trim(),
@@ -822,6 +906,37 @@
                     container.appendChild(card);
                 });
             } catch (error) { container.textContent = error.message || "Không tải được danh sách báo cáo viên."; }
+        }
+
+        async function checkProposedDateAvailability(conferenceId, changedInput) {
+            const startInput = document.getElementById("proposedStartTime");
+            const endInput = document.getElementById("proposedEndTime");
+            const message = document.getElementById("detailActionMessage");
+            if (!startInput?.value && !endInput?.value) return;
+            const startValue = startInput.value || endInput.value;
+            const endValue = endInput.value || startInput.value;
+            if (new Date(endValue) < new Date(startValue)) {
+                changedInput.value = "";
+                message.className = "small text-danger";
+                message.textContent = "Ngày kết thúc phải cùng ngày hoặc sau ngày bắt đầu.";
+                return;
+            }
+            try {
+                const result = await getApprovedDateConflicts(conferenceId, new Date(startValue).toISOString(), new Date(endValue).toISOString());
+                const conflicts = result.data || [];
+                if (conflicts.length) {
+                    changedInput.value = "";
+                    message.className = "small text-danger";
+                    const details = conflicts.map(item => `${item.title || item.code || "Hội nghị"} · ${formatDateTime(item.start_time)} · ${item.location}`).join("; ");
+                    message.textContent = `Không thể chọn ngày này vì trùng lịch hội nghị đã phê duyệt: ${details}`;
+                    return;
+                }
+                message.className = "small text-success";
+                message.textContent = "Ngày đề xuất không trùng ngày với hội nghị đã phê duyệt.";
+            } catch (error) {
+                message.className = "small text-danger";
+                message.textContent = error.message || "Không kiểm tra được lịch đã phê duyệt.";
+            }
         }
 
         async function saveConferenceStatus(id) {
@@ -930,19 +1045,67 @@
                     list.textContent = "Chưa có tệp đính kèm.";
                     return;
                 }
-                attachments.forEach(function (attachment) {
-                    const button = document.createElement("button");
-                    button.type = "button";
-                    button.className = "btn btn-sm btn-outline-primary me-2 mb-2";
-                    button.textContent = `${attachment.name || attachment.file_name || "Tệp"} (${formatFileSize(attachment.size || attachment.file_size || 0)})`;
-                    button.addEventListener("click", function () {
-                        openConferenceAttachment(attachment).catch(error => alert(error.message));
-                    });
-                    list.appendChild(button);
+                let currentUser = null;
+                try { currentUser = JSON.parse(localStorage.getItem("tgpl.user") || "null"); } catch { currentUser = null; }
+                attachments.forEach(attachment => {
+                    const row = document.createElement("div"); row.className = "d-flex flex-wrap align-items-center gap-2 mb-2";
+                    const name = document.createElement("span"); name.className = "small me-1";
+                    name.textContent = `${attachment.name || attachment.file_name || "Tệp"} (${formatFileSize(attachment.size || attachment.file_size || 0)})`;
+                    const download = document.createElement("button"); download.type = "button"; download.className = "btn btn-sm btn-outline-primary"; download.textContent = "Tải xuống";
+                    download.addEventListener("click", () => openConferenceAttachment(attachment).catch(error => alert(error.message)));
+                    row.append(name, download);
+                    const canReplaceThisFile = currentUser?.role === "ADMIN" || String(attachment.uploaded_by) === String(currentUser?.id);
+                    if (canReplaceThisFile) {
+                        const input = document.createElement("input"); input.type = "file"; input.hidden = true; input.setAttribute("aria-label", `Chọn tệp thay thế cho ${attachment.name || attachment.file_name}`);
+                        const replace = document.createElement("button"); replace.type = "button"; replace.className = "btn btn-sm btn-outline-warning"; replace.textContent = "Thay thế tệp";
+                        replace.addEventListener("click", () => input.click());
+                        input.addEventListener("change", async () => {
+                            const file = input.files?.[0]; if (!file) return;
+                            replace.disabled = true;
+                            try { await replaceConferenceAttachment(conferenceId, attachment.id, file); await renderConferenceAttachments(conferenceId); }
+                            catch (error) { alert(error.message || "Không thay thế được tệp."); replace.disabled = false; input.value = ""; }
+                        });
+                        row.append(input, replace);
+                    }
+                    if (currentUser?.role === "ADMIN") {
+                        const remove = document.createElement("button"); remove.type = "button"; remove.className = "btn btn-sm btn-outline-danger"; remove.textContent = "Xóa tệp";
+                        remove.addEventListener("click", async () => {
+                            if (!confirm(`Xóa tệp “${attachment.name || attachment.file_name}”?`)) return;
+                            remove.disabled = true;
+                            try { await deleteConferenceAttachment(attachment.id); await renderConferenceAttachments(conferenceId); }
+                            catch (error) { alert(error.message || "Không xóa được tệp."); remove.disabled = false; }
+                        });
+                        row.appendChild(remove);
+                    }
+                    list.appendChild(row);
                 });
             } catch (error) {
                 list.textContent = error.message || "Không tải được danh sách tệp.";
             }
+        }
+
+        async function appendAdminTaskAttachments(card, assignment) {
+            const section = document.createElement("div"); section.className = "border-top mt-2 pt-2";
+            const heading = document.createElement("div"); heading.className = "small fw-semibold mb-1"; heading.textContent = "Tệp của nhiệm vụ"; section.appendChild(heading);
+            const list = document.createElement("div"); section.appendChild(list); card.appendChild(section);
+            try {
+                const result = await getTaskAttachments(assignment.id);
+                const files = result || [];
+                if (!files.length) { list.textContent = "Chưa có tệp nhiệm vụ."; list.className = "small text-muted"; return; }
+                files.forEach(file => {
+                    const row = document.createElement("div"); row.className = "d-flex flex-wrap align-items-center gap-2 mb-2";
+                    const name = document.createElement("span"); name.className = "small"; name.textContent = `${file.name || file.file_name} (${formatFileSize(file.size || file.file_size || 0)})`;
+                    const download = document.createElement("button"); download.type = "button"; download.className = "btn btn-sm btn-outline-primary"; download.textContent = "Tải xuống";
+                    download.addEventListener("click", () => openConferenceAttachment(file).catch(error => alert(error.message)));
+                    const input = document.createElement("input"); input.type = "file"; input.hidden = true; input.setAttribute("aria-label", `Chọn tệp thay thế cho ${file.name || file.file_name}`);
+                    const replace = document.createElement("button"); replace.type = "button"; replace.className = "btn btn-sm btn-outline-warning"; replace.textContent = "Thay thế tệp";
+                    replace.addEventListener("click", () => input.click());
+                    input.addEventListener("change", async () => { const selected = input.files?.[0]; if (!selected) return; replace.disabled = true; try { await replaceTaskAttachment(assignment.id, file.id, selected); await renderConferenceAssignments(assignment.conference_id); } catch (error) { alert(error.message || "Không thay thế được tệp."); replace.disabled = false; } });
+                    const remove = document.createElement("button"); remove.type = "button"; remove.className = "btn btn-sm btn-outline-danger"; remove.textContent = "Xóa tệp";
+                    remove.addEventListener("click", async () => { if (!confirm(`Xóa tệp “${file.name || file.file_name}”?`)) return; remove.disabled = true; try { await deleteTaskAttachment(file.id); await renderConferenceAssignments(assignment.conference_id); } catch (error) { alert(error.message || "Không xóa được tệp."); remove.disabled = false; } });
+                    row.append(name, download, input, replace, remove); list.appendChild(row);
+                });
+            } catch (error) { list.className = "small text-danger"; list.textContent = error.message || "Không tải được tệp nhiệm vụ."; }
         }
 
 

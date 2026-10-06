@@ -31,14 +31,14 @@
         <section class="card">
             <div class="card-header">Danh sách đơn vị</div>
             <div class="table-responsive"><table class="table table-hover align-middle mb-0">
-                <thead class="table-light"><tr><th>Tên đơn vị</th><th>Ngày tạo</th></tr></thead>
-                <tbody id="organizationRows"><tr><td colspan="2" class="text-muted">Đang tải...</td></tr></tbody>
+                <thead class="table-light"><tr><th>Tên đơn vị</th><th>Ngày tạo</th><th>Thao tác</th></tr></thead>
+                <tbody id="organizationRows"><tr><td colspan="3" class="text-muted">Đang tải...</td></tr></tbody>
             </table></div>
         </section>
     </main>
     <script src="assets/js/config.js?v=20261004-tunnel-2"></script>
-    <script src="assets/js/api.js?v=20261003-reschedule-1"></script>
-    <script src="assets/js/auth.js"></script>
+    <script src="assets/js/api.js?v=20261007-organization-edit-1"></script>
+    <script src="assets/js/auth.js?v=20261004-deadline-1"></script>
     <script>
         const form = document.getElementById("organizationForm");
         const rows = document.getElementById("organizationRows");
@@ -58,7 +58,7 @@
                 if (!organizations.length) {
                     const row = rows.insertRow();
                     const cell = row.insertCell();
-                    cell.colSpan = 2;
+                    cell.colSpan = 3;
                     cell.className = "text-muted";
                     cell.textContent = "Chưa có đơn vị. Hãy thêm đơn vị trước khi đăng ký hội nghị.";
                     return;
@@ -71,6 +71,26 @@
                     dateCell.textContent = organization.created_at
                         ? new Date(organization.created_at).toLocaleDateString("vi-VN")
                         : "";
+                    const actionCell = row.insertCell();
+                    const editButton = document.createElement("button");
+                    editButton.type = "button";
+                    editButton.className = "btn btn-outline-primary btn-sm admin-only";
+                    editButton.textContent = "Sửa tên";
+                    editButton.addEventListener("click", async () => {
+                        if (window.tgplCurrentUser?.role !== "ADMIN") return;
+                        const name = window.prompt("Nhập tên mới cho xã/phường/đơn vị:", organization.name)?.trim();
+                        if (!name || name === organization.name) return;
+                        editButton.disabled = true;
+                        try {
+                            await updateOrganization(organization.id, { name });
+                            showMessage(`Đã đổi tên đơn vị thành “${name}”.`);
+                            await loadOrganizations();
+                        } catch (error) {
+                            showMessage(error.message || "Không sửa được tên đơn vị.", "danger");
+                            editButton.disabled = false;
+                        }
+                    });
+                    actionCell.appendChild(editButton);
                 });
             } catch (error) {
                 rows.replaceChildren();

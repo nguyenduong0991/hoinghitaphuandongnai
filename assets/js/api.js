@@ -75,6 +75,21 @@ function localRequest(endpoint, options = {}) {
         writeStored(STORAGE_KEYS.organizations, organizations);
         return { data: organization };
     }
+    const organizationMatch = endpoint.match(/^\/organizations\/([^/]+)$/);
+    if (organizationMatch && method === "PUT") {
+        const id = decodeURIComponent(organizationMatch[1]);
+        const organizations = readStored(STORAGE_KEYS.organizations);
+        const organization = organizations.find(item => String(item.id) === id);
+        if (!organization) throw new Error("Không tìm thấy đơn vị.");
+        const name = String(data.name || "").trim();
+        if (!name) throw new Error("Vui lòng nhập tên đơn vị.");
+        if (organizations.some(item => String(item.id) !== id && item.name.toLocaleLowerCase("vi") === name.toLocaleLowerCase("vi"))) {
+            throw new Error("Tên đơn vị đã tồn tại.");
+        }
+        organization.name = name;
+        writeStored(STORAGE_KEYS.organizations, organizations);
+        return { data: organization };
+    }
     if (endpoint === "/conferences" && method === "GET") {
         return { data: readStored(STORAGE_KEYS.conferences) };
     }
@@ -150,6 +165,13 @@ async function createOrganization(name) {
     return apiRequest("/organizations", { method: "POST", body: JSON.stringify({ name }) });
 }
 
+async function updateOrganization(id, organization) {
+    return apiRequest(`/organizations/${encodeURIComponent(id)}`, {
+        method: "PUT",
+        body: JSON.stringify(organization)
+    });
+}
+
 async function updateConferenceStatus(id, status, reason = "", scheduleProposal = {}) {
     return apiRequest(`/conferences/${encodeURIComponent(id)}/status`, {
         method: "PATCH",
@@ -192,6 +214,12 @@ async function recordAccessMetric(metric) {
 }
 async function getAccessMetrics() { return apiRequest("/analytics/metrics"); }
 async function getConferenceStatistics() { return apiRequest("/conferences/statistics"); }
+async function getMyConferenceNotifications() { return apiRequest("/my-conference-notifications"); }
+async function respondToConferenceReschedule(id, response) {
+    return apiRequest(`/my/conferences/${encodeURIComponent(id)}/reschedule-response`, {
+        method: "PATCH", body: JSON.stringify({ response })
+    });
+}
 async function getConferenceAssignments(id) { return apiRequest(`/conferences/${encodeURIComponent(id)}/assignments`); }
 async function createConferenceAssignment(id, assignment) {
     return apiRequest(`/conferences/${encodeURIComponent(id)}/assignments`, { method: "POST", body: JSON.stringify(assignment) });
@@ -218,4 +246,30 @@ async function deleteConferenceSpeaker(id, speakerId) {
 }
 async function getConferenceScheduleConflicts(id) {
     return apiRequest(`/conferences/${encodeURIComponent(id)}/schedule-conflicts`);
+}
+async function getApprovedDateConflicts(id, startTime, endTime) {
+    const query = new URLSearchParams({ start_time: startTime, end_time: endTime });
+    return apiRequest(`/conferences/${encodeURIComponent(id)}/approved-date-conflicts?${query}`);
+}
+async function getMyAssignments() { return apiRequest("/my-assignments"); }
+async function getMyReminders() { return apiRequest("/my-reminders"); }
+async function getMyStaffChangeRequests() { return apiRequest("/my-assignments/change-requests"); }
+async function createStaffChangeRequest(request) {
+    return apiRequest("/my-assignments/change-requests", { method: "POST", body: JSON.stringify(request) });
+}
+async function getStaffChangeRequests() { return apiRequest("/staff-change-requests"); }
+async function reviewStaffChangeRequest(id, decision) {
+    return apiRequest(`/staff-change-requests/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(decision) });
+}
+async function updateMyTaskStatus(id, status) {
+    return apiRequest(`/my-assignments/tasks/${encodeURIComponent(id)}/status`, { method: "PATCH", body: JSON.stringify({ status }) });
+}
+async function getAssignmentReports(filters = {}) {
+    const query = new URLSearchParams(filters).toString();
+    return apiRequest(`/assignment-reports${query ? `?${query}` : ""}`);
+}
+async function saveTaskEvaluation(taskId, rating, note) {
+    return apiRequest(`/assignment-reports/tasks/${encodeURIComponent(taskId)}/evaluation`, {
+        method: "PATCH", body: JSON.stringify({ rating: Number(rating), note })
+    });
 }

@@ -2,8 +2,18 @@
 // APP.JS - DASHBOARD QUẢN LÝ HỘI NGHỊ TGPL
 // ======================================================
 
+function setDashboardRoleVisibility(user) {
+    const isAdmin = user?.role === "ADMIN";
+    const isCommune = user?.role === "COMMUNE";
+    document.querySelectorAll(".admin-dashboard-only").forEach(section => { section.hidden = !isAdmin; });
+    document.querySelectorAll(".commune-dashboard-only").forEach(section => { section.hidden = !isCommune; });
+}
+
+window.addEventListener("tgpl:authenticated", event => setDashboardRoleVisibility(event.detail?.user));
+
 document.addEventListener("DOMContentLoaded", async function () {
     console.log("Đang khởi tạo Dashboard...");
+    try { setDashboardRoleVisibility(JSON.parse(localStorage.getItem("tgpl.user") || "null")); } catch { setDashboardRoleVisibility(null); }
 
     try {
         const health = await checkBackend();

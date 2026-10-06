@@ -25,7 +25,7 @@
     <!-- CSS của hệ thống -->
     <link
         rel="stylesheet"
-        href="assets/css/style.css?v=20261003-dashboard-report-1"
+        href="assets/css/style.css?v=20261005-topic-suggestions-1"
     >
 </head>
 
@@ -63,6 +63,11 @@
             Phân tích nhu cầu (F09)
         </a>
 
+        <a href="assignment-reports.html" class="admin-only">
+            <i class="bi bi-clipboard-data"></i>
+            Báo cáo – thống kê
+        </a>
+
     </div>
 
 
@@ -72,9 +77,42 @@
 
     <div class="content">
 
-        <h2>
-            Hệ thống Điều phối Hội nghị TGPL
-        </h2>
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+            <h2 class="mb-0">Hệ thống Điều phối Hội nghị TGPL</h2>
+            <div class="d-flex align-items-center gap-2">
+                <div id="registrantNotificationWrap" class="position-relative" hidden>
+                    <button id="registrantNotificationButton" type="button" class="btn btn-outline-primary position-relative" aria-label="Thông báo hội nghị của đơn vị" aria-expanded="false" aria-controls="registrantNotificationPanel">
+                        <i class="bi bi-bell-fill" aria-hidden="true"></i>
+                        <span class="ms-1 d-none d-sm-inline">Thông báo</span>
+                        <span id="registrantNotificationBadge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill text-bg-danger" hidden>0</span>
+                    </button>
+                    <div id="registrantNotificationPanel" class="card shadow position-absolute end-0 mt-2" style="width:min(92vw, 480px); z-index:1050; max-height:70vh; overflow:auto;" hidden>
+                        <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+                            Cập nhật hội nghị của đơn vị
+                            <button id="refreshRegistrantNotifications" type="button" class="btn btn-sm btn-outline-secondary" aria-label="Làm mới thông báo"><i class="bi bi-arrow-clockwise"></i></button>
+                        </div>
+                        <div id="registrantNotificationList" class="list-group list-group-flush"><div class="list-group-item text-muted">Đang tải...</div></div>
+                    </div>
+                </div>
+                <div id="adminNotificationWrap" class="admin-only position-relative" hidden>
+                    <button id="adminNotificationButton" type="button" class="btn btn-outline-primary position-relative" aria-label="Thông báo yêu cầu đang chờ" aria-expanded="false" aria-controls="adminNotificationPanel">
+                        <i class="bi bi-bell-fill" aria-hidden="true"></i>
+                        <span class="ms-1 d-none d-sm-inline">Thông báo</span>
+                        <span id="adminNotificationBadge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill text-bg-danger" hidden>0</span>
+                    </button>
+                    <div id="adminNotificationPanel" class="card shadow position-absolute end-0 mt-2" style="width:min(92vw, 440px); z-index:1050; max-height:60vh; overflow:auto;" hidden>
+                        <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+                            Yêu cầu cần xử lý
+                            <button id="refreshAdminNotifications" type="button" class="btn btn-sm btn-outline-secondary" aria-label="Làm mới thông báo"><i class="bi bi-arrow-clockwise"></i></button>
+                        </div>
+                        <div id="adminNotificationList" class="list-group list-group-flush"><div class="list-group-item text-muted">Đang tải...</div></div>
+                    </div>
+                </div>
+                <button id="dashboardLogout" type="button" class="btn btn-outline-danger" hidden>
+                    <i class="bi bi-box-arrow-right me-1"></i>Đăng xuất
+                </button>
+            </div>
+        </div>
 
         <p class="text-muted">
             Trung tâm Trợ giúp pháp lý Nhà nước
@@ -109,7 +147,8 @@
             <div class="report-footnote"><i class="bi bi-info-circle"></i> Số liệu và biểu đồ là tổng hợp toàn hệ thống; danh sách hội nghị gần đây bên dưới chỉ gồm địa bàn của tài khoản. Tỷ lệ so sánh là biến động quan sát được, không phải kết luận về nguyên nhân.</div>
         </section>
 
-        <h5 class="section-label mt-4">Tổng quan toàn hệ thống</h5>
+        <section class="admin-dashboard-only" hidden>
+<h5 class="section-label mt-4">Tổng quan toàn hệ thống</h5>
         <div class="row g-3">
 
             <!-- Tổng hồ sơ -->
@@ -229,7 +268,29 @@
         </div>
         </div>
         </div>
+        </section>
 
+        <section class="commune-dashboard-only" hidden>
+<section class="topic-suggestions mt-4 mb-4" aria-labelledby="topicSuggestionsHeading">
+            <div class="topic-suggestions-heading">
+                <div>
+                    <span class="topic-eyebrow"><i class="bi bi-lightbulb-fill me-1" aria-hidden="true"></i>GỢI Ý NỘI DUNG</span>
+                    <h3 id="topicSuggestionsHeading">Đề xuất các chủ đề đang được quan tâm</h3>
+                    <p class="mb-0">Danh sách chủ đề tham khảo để xây dựng kế hoạch và lựa chọn nội dung hội nghị.</p>
+                </div>
+            </div>
+            <div class="row g-3 mt-1">
+                <div class="col-md-6"><article class="topic-card"><span class="topic-number">01</span><div><h4>Chuyển đổi số trong hoạt động tố tụng</h4><p>Ứng dụng dữ liệu số, hồ sơ điện tử và liên thông thông tin giữa các cơ quan tiến hành tố tụng.</p></div></article></div>
+                <div class="col-md-6"><article class="topic-card"><span class="topic-number">02</span><div><h4>Phối hợp liên ngành trong giải quyết án hình sự</h4><p>Những vấn đề thường phát sinh trong quá trình điều tra – truy tố – xét xử.</p></div></article></div>
+                <div class="col-md-6"><article class="topic-card"><span class="topic-number">03</span><div><h4>Công tác xử lý vụ án có người dưới 18 tuổi</h4><p>Những điểm cần lưu ý khi áp dụng các quy định mới.</p></div></article></div>
+                <div class="col-md-6"><article class="topic-card"><span class="topic-number">04</span><div><h4>Nâng cao chất lượng xét xử, kiểm sát và điều tra</h4></div></article></div>
+                <div class="col-md-6"><article class="topic-card"><span class="topic-number">05</span><div><h4>Phòng, chống tội phạm trên không gian mạng</h4></div></article></div>
+                <div class="col-md-6"><article class="topic-card"><span class="topic-number">06</span><div><h4>Tiếp nhận và giải quyết tin báo, tố giác về tội phạm</h4></div></article></div>
+                <div class="col-md-6"><article class="topic-card"><span class="topic-number">07</span><div><h4>Công tác thi hành án hình sự tại cộng đồng</h4></div></article></div>
+                <div class="col-md-6"><article class="topic-card"><span class="topic-number">08</span><div><h4>Trợ giúp pháp lý trong hoạt động tố tụng</h4></div></article></div>
+            </div>
+        </section>
+        </section>
 
         <!-- =========================
              HỒ SƠ GẦN ĐÂY
@@ -276,12 +337,13 @@
 
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
     <!-- JavaScript của hệ thống -->
     <script src="assets/js/config.js?v=20261004-tunnel-2"></script>
-    <script src="assets/js/api.js?v=20261003-unit-scope-1"></script>
-    <script src="assets/js/auth.js"></script>
-    <script src="assets/js/app.js?v=20261003-unit-scope-1"></script>
+    <script src="assets/js/api.js?v=20261006-reschedule-response-1"></script>
+    <script src="assets/js/auth.js?v=20261004-deadline-1"></script>
+    <script src="assets/js/app.js?v=20261005-dashboard-role-topics-1"></script>
+    <script src="assets/js/admin-notifications.js?v=20261006-reschedule-response-1"></script>
+    <script src="assets/js/registrant-notifications.js?v=20261006-reschedule-response-1"></script>
 
 </body>
 </html>
