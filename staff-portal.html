@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Phân công · Hội nghị TGPL</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="assets/css/style.css?v=20261008-shared-chat-1">
 </head>
 <body>
     <nav class="navbar navbar-dark bg-primary"><div class="container-fluid">
@@ -27,13 +27,15 @@
     <main class="container py-4">
         <div class="mb-4"><h2 id="welcome">Nhiệm vụ và lịch báo cáo viên</h2><p class="text-muted mb-0">Danh sách phân công dùng chung cho người nhận nhiệm vụ và báo cáo viên. Thông tin liên hệ cá nhân không hiển thị tại đây.</p></div>
         <div id="message" class="alert alert-danger" hidden></div>
+        <section id="publicAttendanceSection" class="card mb-4" hidden><div class="card-header d-flex justify-content-between align-items-center"><strong>Danh sách người dân đăng ký và điểm danh</strong><span id="publicAttendanceCount" class="badge text-bg-success">0</span></div><div id="publicAttendanceList" class="card-body"><span class="text-muted">Đang tải danh sách…</span></div></section>
         <section class="card mb-4"><div class="card-header d-flex justify-content-between align-items-center"><strong>Nhiệm vụ được giao</strong><span id="taskCount" class="badge text-bg-primary">0</span></div><div id="taskList" class="card-body"><span class="text-muted">Đang tải...</span></div></section>
         <section class="card"><div class="card-header d-flex justify-content-between align-items-center"><strong>Lịch báo cáo viên</strong><span id="speakerCount" class="badge text-bg-success">0</span></div><div id="speakerList" class="card-body"><span class="text-muted">Đang tải...</span></div></section>
     </main>
     <script src="assets/js/config.js?v=20261005-task-attachments-2"></script>
-    <script src="assets/js/api.js?v=20261005-task-attachments-2"></script>
-    <script src="assets/js/auth.js?v=20261005-task-attachments-2"></script>
+    <script src="assets/js/api.js?v=20261011-manual-attendance-1"></script>
+    <script src="assets/js/auth.js?v=20261009-ai-review-1"></script>
     <script src="assets/js/attachments.js?v=20261005-attachment-management-4"></script>
+    <script src="assets/js/attendance-tools.js?v=20261011-attendance-pages-1"></script>
     <script>
         const currentUser = JSON.parse(localStorage.getItem("tgpl.user") || "null");
         const dateTime = value => value ? new Date(value).toLocaleString("vi-VN", { dateStyle: "medium", timeStyle: "short" }) : "Chưa xác định";
@@ -258,12 +260,197 @@
                 });
             } catch (error) { line(files, error.message || "Không tải được danh sách tài liệu hội nghị.", "small text-danger"); }
         }
+        async function renderPublicAttendance(tasks) {
+            const section = document.getElementById("publicAttendanceSection");
+            const container = document.getElementById("publicAttendanceList");
+            if (currentUser?.role !== "TASK_ASSIGNEE" || !section || !container) return;
+            const ownedTasks = tasks.filter(task => String(task.assignee_user_id) === String(currentUser.id));
+            const conferences = [...new Map(ownedTasks.map(task => [String(task.conference_id), task])).values()]
+                .sort((a, b) => new Date(a.start_time || 0) - new Date(b.start_time || 0));
+            section.hidden = !conferences.length;
+            container.replaceChildren();
+            if (!conferences.length) return;
+            let totalAttendees = 0;
+            for (const conference of conferences) {
+                const group = document.createElement("section");
+                group.className = "border rounded p-3 mb-3";
+                const title = document.createElement("h3");
+                title.className = "h6 fw-semibold mb-0";
+                title.textContent = `${conference.conference_code || ""} · ${conference.conference_title || "Hội nghị"} · ${conference.organization_name || ""}`;
+                const heading = document.createElement("div");
+                heading.className = "d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2";
+                const exportButton = document.createElement("button");
+                exportButton.type = "button";
+                exportButton.className = "btn btn-sm btn-outline-success";
+                exportButton.textContent = "Xuất Excel";
+                exportButton.disabled = true;
+                heading.append(title, exportButton);
+                const meta = document.createElement("div");
+                meta.className = "small text-muted mb-2";
+                meta.textContent = `Thời gian: ${dateTime(conference.start_time)}`;
+                const searchWrap = document.createElement("div");
+                searchWrap.className = "d-flex flex-wrap align-items-center gap-2 mb-2";
+                const search = document.createElement("input");
+                search.type = "search";
+                search.className = "form-control form-control-sm";
+                search.placeholder = "Tìm theo họ tên người đăng ký";
+                search.setAttribute("aria-label", `Tìm tên người đăng ký ${conference.conference_code || "hội nghị"}`);
+                search.style.maxWidth = "360px";
+                const searchCount = document.createElement("span");
+                searchCount.className = "small text-muted";
+                searchWrap.append(search, searchCount);
+                group.append(heading, meta, searchWrap);
+                const addAttendeeButton = document.createElement("button");
+                addAttendeeButton.type = "button";
+                addAttendeeButton.className = "btn btn-sm btn-outline-primary mb-2";
+                addAttendeeButton.textContent = "Điểm danh người chưa đăng ký";
+                const conferenceCompleted = conference.conference_status === "COMPLETED";
+                if (conferenceCompleted) {
+                    addAttendeeButton.disabled = true;
+                    addAttendeeButton.textContent = "Hội nghị đã hoàn thành";
+                }
+                const addAttendeeForm = document.createElement("form");
+                addAttendeeForm.className = "row g-2 align-items-end mb-3";
+                addAttendeeForm.hidden = true;
+                addAttendeeForm.innerHTML = `<div class="col-md-4"><label class="form-label small">Họ và tên *</label><input class="form-control form-control-sm" name="attendee_name" maxlength="160" required></div><div class="col-md-4"><label class="form-label small">Địa chỉ *</label><input class="form-control form-control-sm" name="attendee_address" maxlength="500" required></div><div class="col-md-3"><label class="form-label small">Email (nếu có)</label><input class="form-control form-control-sm" name="attendee_email" type="email" maxlength="254"></div><div class="col-md-1"><button class="btn btn-sm btn-primary w-100" type="submit">Lưu</button></div>`;
+                addAttendeeButton.addEventListener("click", () => { addAttendeeForm.hidden = !addAttendeeForm.hidden; });
+                addAttendeeForm.addEventListener("submit", event => {
+                    if (conferenceCompleted) {
+                        event.preventDefault();
+                        feedback.className = "small mt-2 text-danger";
+                        feedback.textContent = "Hội nghị đã hoàn thành, không thể thêm người tham dự.";
+                    }
+                }, { capture: true });
+                addAttendeeForm.addEventListener("submit", async event => {
+                    event.preventDefault();
+                    const submit = addAttendeeForm.querySelector('[type="submit"]');
+                    const formData = new FormData(addAttendeeForm);
+                    submit.disabled = true;
+                    feedback.className = "small mt-2 text-muted";
+                    feedback.textContent = "Đang lưu người tham dự…";
+                    try {
+                        await createManualConferenceAttendee(conference.conference_id, Object.fromEntries(formData.entries()));
+                        feedback.className = "small mt-2 text-success";
+                        feedback.textContent = "Đã thêm và ghi nhận người này đã dự hội nghị.";
+                        await renderPublicAttendance(tasks);
+                    } catch (error) {
+                        feedback.className = "small mt-2 text-danger";
+                        feedback.textContent = error.message || "Không thêm được người tham dự.";
+                        submit.disabled = false;
+                    }
+                });
+                group.append(addAttendeeButton, addAttendeeForm);
+                const tableWrap = document.createElement("div");
+                tableWrap.className = "table-responsive";
+                const table = document.createElement("table");
+                table.className = "table table-sm table-hover align-middle mb-0";
+                const head = document.createElement("thead");
+                head.innerHTML = "<tr><th>Đã dự</th><th>Họ và tên</th><th>Địa chỉ</th><th>Email</th><th>Đăng ký lúc</th></tr>";
+                const body = document.createElement("tbody");
+                table.append(head, body);
+                tableWrap.appendChild(table);
+                group.appendChild(tableWrap);
+                const pager = document.createElement("div");
+                pager.className = "d-flex flex-wrap justify-content-end align-items-center gap-2 mt-2";
+                const pageInfo = document.createElement("span");
+                pageInfo.className = "small text-muted me-2";
+                const previousPage = document.createElement("button");
+                previousPage.type = "button";
+                previousPage.className = "btn btn-sm btn-outline-secondary";
+                previousPage.textContent = "Trước";
+                const nextPage = document.createElement("button");
+                nextPage.type = "button";
+                nextPage.className = "btn btn-sm btn-outline-secondary";
+                nextPage.textContent = "Tiếp";
+                pager.append(pageInfo, previousPage, nextPage);
+                group.appendChild(pager);
+                let attendancePage = 1;
+                let attendeeCount = 0;
+                const updateAttendancePage = () => {
+                    const state = window.paginateAttendanceRows(body, search.value, attendancePage, 5);
+                    attendancePage = state.page;
+                    pager.hidden = state.total <= 5;
+                    pageInfo.textContent = state.total ? `${state.start}–${state.end} / ${state.total} người` : "0 người";
+                    previousPage.disabled = state.page <= 1;
+                    nextPage.disabled = state.page >= state.pageCount;
+                    searchCount.textContent = search.value ? `${state.total} kết quả` : `${attendeeCount} người`;
+                };
+                previousPage.addEventListener("click", () => { attendancePage--; updateAttendancePage(); });
+                nextPage.addEventListener("click", () => { attendancePage++; updateAttendancePage(); });
+                const feedback = document.createElement("div");
+                feedback.className = "small mt-2";
+                feedback.setAttribute("role", "status");
+                group.appendChild(feedback);
+                container.appendChild(group);
+                try {
+                    const result = await getPublicConferenceAttendees(conference.conference_id);
+                    const attendees = result.data || [];
+                    attendeeCount = attendees.length;
+                    totalAttendees += attendees.length;
+                    exportButton.disabled = attendees.length === 0;
+                    exportButton.addEventListener("click", () => window.downloadConferenceAttendanceExcel(conference.conference_code, conference.conference_title, attendees));
+                    search.addEventListener("input", () => {
+                        attendancePage = 1;
+                        updateAttendancePage();
+                    });
+                    searchCount.textContent = `${attendees.length} người`;
+                    if (!attendees.length) {
+                        const empty = document.createElement("div");
+                        empty.className = "small text-muted mt-2";
+                        empty.textContent = "Chưa có người đăng ký tham dự.";
+                        group.appendChild(empty);
+                        updateAttendancePage();
+                        continue;
+                    }
+                    attendees.forEach(attendee => {
+                        const row = document.createElement("tr");
+                        row.dataset.attendeeName = attendee.attendee_name || "";
+                        const checkCell = document.createElement("td");
+                        const checkbox = document.createElement("input");
+                        checkbox.type = "checkbox";
+                        checkbox.className = "form-check-input";
+                        checkbox.checked = Boolean(attendee.attended_at);
+                        checkbox.setAttribute("aria-label", `Điểm danh ${attendee.attendee_name}`);
+                        checkbox.addEventListener("change", async () => {
+                            checkbox.disabled = true;
+                            feedback.className = "small mt-2 text-muted";
+                            feedback.textContent = "Đang lưu điểm danh…";
+                            try {
+                                await updatePublicAttendanceCheckIn(attendee.id, checkbox.checked);
+                                attendee.attended_at = checkbox.checked ? new Date().toISOString() : null;
+                                feedback.className = "small mt-2 text-success";
+                                feedback.textContent = checkbox.checked ? "Đã ghi nhận điểm danh." : "Đã bỏ đánh dấu điểm danh.";
+                            } catch (error) {
+                                checkbox.checked = !checkbox.checked;
+                                feedback.className = "small mt-2 text-danger";
+                                feedback.textContent = error.message || "Không cập nhật được điểm danh.";
+                            } finally { checkbox.disabled = false; }
+                        });
+                        checkCell.appendChild(checkbox);
+                        const nameCell = document.createElement("td"); nameCell.textContent = attendee.attendee_name || "";
+                        const addressCell = document.createElement("td"); addressCell.textContent = attendee.attendee_address || "";
+                        const emailCell = document.createElement("td"); emailCell.textContent = attendee.attendee_email || "—";
+                        const createdCell = document.createElement("td"); createdCell.textContent = dateTime(attendee.created_at);
+                        row.append(checkCell, nameCell, addressCell, emailCell, createdCell);
+                        body.appendChild(row);
+                    });
+                    updateAttendancePage();
+                } catch (error) {
+                    const unavailable = document.createElement("div");
+                    unavailable.className = "small text-danger mt-2";
+                    unavailable.textContent = error.message || "Không tải được danh sách người đăng ký.";
+                    group.appendChild(unavailable);
+                }
+            }
+            document.getElementById("publicAttendanceCount").textContent = String(totalAttendees);
+        }
         async function loadAssignments() {
             const message = document.getElementById("message"); message.hidden = true;
             try {
                 const result = await getMyAssignments();
                 const tasks = result.data?.tasks || [];
                 const speakers = result.data?.speakers || [];
+                await renderPublicAttendance(tasks);
                 let requests = [];
                 let changeRequestServiceAvailable = true;
                 try {

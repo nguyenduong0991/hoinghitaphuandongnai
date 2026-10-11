@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1"
+    >
+
+    <title>Hệ thống Hội nghị TGPL Thành phố Đồng Nai</title>
+
+    <!-- Bootstrap -->
+    <link
+        rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+    >
+
+    <!-- Bootstrap Icons -->
+    <link
+        rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
+    >
+
+    <!-- CSS của hệ thống -->
+    <link
+        rel="stylesheet"
+        href="assets/css/style.css?v=20261008-shared-chat-1"
+    >
+</head>
+
+<body>
+
+    <!-- =========================
+         SIDEBAR
+    ========================== -->
+
+    <div class="sidebar">
+
+        <h4 class="p-3">
+            ⚖️ TGPL
+            <br>
+            TP. Đồng Nai
+        </h4>
+
+        <a href="dashboard.html">
+            <i class="bi bi-speedometer2"></i>
+            Dashboard
+        </a>
+
+        <a href="create-conference.html">
+            <i class="bi bi-plus-circle"></i>
+            Tạo hội nghị
+        </a>
+
+        <a href="conference-list.html">
+            <i class="bi bi-card-list"></i>
+            Danh sách hội nghị
+        </a>
+
+        <a href="analytics.html">
+            <i class="bi bi-graph-up-arrow"></i>
+            Phân tích nhu cầu (F09)
+        </a>
+
+        <a href="survey.html" class="commune-only" hidden>
+            <i class="bi bi-ui-checks-grid"></i>
+            Phiếu khảo sát nhu cầu
+        </a>
+
+        <a href="survey-results.html" class="admin-only">
+            <i class="bi bi-clipboard2-pulse"></i>
+            Tổng hợp phiếu khảo sát
+        </a>
+
+        <a href="ai-feedback.html" class="admin-only">
+            <i class="bi bi-chat-square-text"></i>
+            Rà soát câu trả lời AI
+        </a>
+
+        <a href="assignment-reports.html" class="admin-only">
+            <i class="bi bi-clipboard-data"></i>
+            Báo cáo – thống kê
+        </a>
+
+    </div>
+
+
+    <!-- =========================
+         NỘI DUNG CHÍNH
+    ========================== -->
+
+    <div class="content">
+
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+            <h2 class="mb-0">Hệ thống Điều phối Hội nghị TGPL</h2>
+            <div class="d-flex align-items-center gap-2">
+                <div id="registrantNotificationWrap" class="position-relative" hidden>
+                    <button id="registrantNotificationButton" type="button" class="btn btn-outline-primary position-relative" aria-label="Thông báo hội nghị của đơn vị" aria-expanded="false" aria-controls="registrantNotificationPanel">
+                        <i class="bi bi-bell-fill" aria-hidden="true"></i>
+                        <span class="ms-1 d-none d-sm-inline">Thông báo</span>
+                        <span id="registrantNotificationBadge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill text-bg-danger" hidden>0</span>
+                    </button>
+                    <div id="registrantNotificationPanel" class="card shadow position-absolute end-0 mt-2" style="width:min(92vw, 480px); z-index:1050; max-height:70vh; overflow:auto;" hidden>
+                        <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+                            Cập nhật hội nghị của đơn vị
+                            <button id="refreshRegistrantNotifications" type="button" class="btn btn-sm btn-outline-secondary" aria-label="Làm mới thông báo"><i class="bi bi-arrow-clockwise"></i></button>
+                        </div>
+                        <div id="registrantNotificationList" class="list-group list-group-flush"><div class="list-group-item text-muted">Đang tải...</div></div>
+                    </div>
+                </div>
+                <div id="adminNotificationWrap" class="admin-only position-relative" hidden>
+                    <button id="adminNotificationButton" type="button" class="btn btn-outline-primary position-relative" aria-label="Thông báo yêu cầu đang chờ" aria-expanded="false" aria-controls="adminNotificationPanel">
+                        <i class="bi bi-bell-fill" aria-hidden="true"></i>
+                        <span class="ms-1 d-none d-sm-inline">Thông báo</span>
+                        <span id="adminNotificationBadge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill text-bg-danger" hidden>0</span>
+                    </button>
+                    <div id="adminNotificationPanel" class="card shadow position-absolute end-0 mt-2" style="width:min(92vw, 440px); z-index:1050; max-height:60vh; overflow:auto;" hidden>
+                        <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+                            Yêu cầu cần xử lý
+                            <button id="refreshAdminNotifications" type="button" class="btn btn-sm btn-outline-secondary" aria-label="Làm mới thông báo"><i class="bi bi-arrow-clockwise"></i></button>
+                        </div>
+                        <div id="adminNotificationList" class="list-group list-group-flush"><div class="list-group-item text-muted">Đang tải...</div></div>
+                    </div>
+                </div>
+                <button id="dashboardLogout" type="button" class="btn btn-outline-danger" hidden>
+                    <i class="bi bi-box-arrow-right me-1"></i>Đăng xuất
+                </button>
+            </div>
+        </div>
+
+        <section id="registrantSurveyCard" class="commune-only card border-primary shadow-sm mb-3" hidden>
+            <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-3">
+                <div><h2 class="h5 mb-1"><i class="bi bi-ui-checks text-primary me-2"></i>Chia sẻ nhu cầu trợ giúp pháp lý</h2><p class="text-muted mb-0">Đề xuất địa bàn, nhóm đối tượng, quy mô, nội dung tập huấn và đánh giá phối hợp sau hội nghị.</p></div>
+                <a class="btn btn-primary" href="survey.html">Mở phiếu khảo sát</a>
+            </div>
+        </section>
+
+        <p class="text-muted">
+            Trung tâm Trợ giúp pháp lý Nhà nước
+            Thành phố Đồng Nai
+        </p>
+
+
+        <!-- =========================
+             KPI
+        ========================== -->
+
+        <div id="connectionError" class="mb-3" style="display:none;"></div>
+        <div class="alert alert-warning" role="status">
+            <strong>Bản chạy thử:</strong> dữ liệu được lưu trên backend dùng chung để các tài khoản cùng xem và xử lý. Đây là máy chủ thử nghiệm trên máy tính cá nhân nên chỉ hoạt động khi máy tính và Quick Tunnel đang chạy.
+        </div>
+
+        <section class="report-highlight mb-4" aria-labelledby="reportHeading">
+            <div class="report-heading">
+                <div>
+                    <span class="report-eyebrow"><i class="bi bi-activity"></i> BÁO CÁO NHANH</span>
+                    <h3 id="reportHeading">Tình hình 30 ngày gần nhất</h3>
+                    <p id="reportPeriod" class="mb-0">Đang tổng hợp dữ liệu…</p>
+                </div>
+                <span id="reportUpdated" class="report-updated"><i class="bi bi-arrow-repeat"></i> Tự cập nhật khi mở dashboard</span>
+            </div>
+            <div class="row g-3 mt-1">
+                <div class="col-sm-6 col-xl-3"><div class="report-kpi"><span class="report-kpi-label">Hội nghị đăng ký</span><strong id="periodRegistered">—</strong><span id="registeredChange" class="report-change">Đang tải</span><small id="registeredTotal" class="report-total"></small></div></div>
+                <div class="col-sm-6 col-xl-3"><div class="report-kpi"><span class="report-kpi-label">Đã phê duyệt</span><strong id="periodApproved">—</strong><span id="approvedChange" class="report-change">Đang tải</span><small id="approvedTotal" class="report-total"></small></div></div>
+                <div class="col-sm-6 col-xl-3"><div class="report-kpi"><span class="report-kpi-label">Đã hoàn thành</span><strong id="periodCompleted">—</strong><span id="completedChange" class="report-change">Đang tải</span><small id="completedTotal" class="report-total"></small></div></div>
+                <div class="col-sm-6 col-xl-3"><div class="report-kpi"><span class="report-kpi-label">Người dự kiến tham dự</span><strong id="periodParticipants">—</strong><span id="participantsChange" class="report-change">Đang tải</span><small id="participantsTotal" class="report-total"></small></div></div>
+            </div>
+            <div class="report-footnote"><i class="bi bi-info-circle"></i> Số liệu và biểu đồ là tổng hợp toàn hệ thống; danh sách hội nghị gần đây bên dưới chỉ gồm địa bàn của tài khoản. Tỷ lệ so sánh là biến động quan sát được, không phải kết luận về nguyên nhân.</div>
+        </section>
+
+        <section class="admin-dashboard-only" hidden>
+<h5 class="section-label mt-4">Tổng quan toàn hệ thống</h5>
+        <div class="row g-3">
+
+            <!-- Tổng hồ sơ -->
+            <div class="col-md-3">
+
+                <div class="card card-kpi bg-primary text-white">
+
+                    <div class="card-body">
+
+                        <h6>
+                            Tổng hồ sơ
+                        </h6>
+
+                        <h2 id="totalConferences">
+                            0
+                        </h2>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- Chờ phê duyệt -->
+            <div class="col-md-3">
+
+                <div class="card card-kpi bg-warning">
+
+                    <div class="card-body">
+
+                        <h6>
+                            Chờ phê duyệt
+                        </h6>
+
+                        <h2 id="pendingConferences">
+                            0
+                        </h2>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- Đã phê duyệt -->
+            <div class="col-md-3">
+
+                <div class="card card-kpi bg-success text-white">
+
+                    <div class="card-body">
+
+                        <h6>
+                            Đã phê duyệt
+                        </h6>
+
+                        <h2 id="approvedConferences">
+                            0
+                        </h2>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- Hoàn thành -->
+            <div class="col-md-3">
+
+                <div class="card card-kpi bg-danger text-white">
+
+                    <div class="card-body">
+
+                        <h6>
+                            Hoàn thành
+                        </h6>
+
+                        <h2 id="completedConferences">
+                            0
+                        </h2>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- =========================
+             BIỂU ĐỒ
+        ========================== -->
+
+        <div class="row g-3 mt-1">
+        <div class="col-lg-7">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center"><span>Xu hướng đăng ký 6 tháng</span><span class="text-muted small">So với tháng liền trước</span></div>
+            <div class="card-body"><div class="chart-container"><canvas id="trendChart" aria-label="Biểu đồ xu hướng hội nghị đăng ký"></canvas></div></div>
+        </div>
+        </div>
+        <div class="col-lg-5">
+        <div class="card h-100">
+
+            <div class="card-header">
+                Tỷ trọng trạng thái toàn hệ thống
+            </div>
+
+            <div class="card-body">
+
+                <div class="chart-container"><canvas id="statusChart" aria-label="Biểu đồ trạng thái hội nghị"></canvas></div>
+
+            </div>
+
+        </div>
+        </div>
+        </div>
+        </section>
+
+<section class="commune-dashboard-only dashboard-planning row g-3 mt-3 mb-4" hidden aria-label="Gợi ý chủ đề hội nghị">
+    <div class="col-12">
+        <section class="topic-suggestions h-100" aria-labelledby="topicSuggestionsHeading">
+            <div class="topic-suggestions-heading">
+                <div>
+                    <span class="topic-eyebrow"><i class="bi bi-lightbulb-fill me-1" aria-hidden="true"></i>GỢI Ý NỘI DUNG</span>
+                    <h3 id="topicSuggestionsHeading">Chủ đề được quan tâm</h3>
+                    <p class="mb-0">Tham khảo nhanh 8 nhóm chủ đề.</p>
+                </div>
+            </div>
+            <div class="topic-suggestion-list">
+                <article class="topic-card"><span class="topic-number">01</span><div><h4>Chuyển đổi số trong hoạt động tố tụng</h4><p>Hồ sơ điện tử, dữ liệu số và liên thông thông tin.</p></div></article>
+                <article class="topic-card"><span class="topic-number">02</span><div><h4>Phối hợp liên ngành trong giải quyết án hình sự</h4><p>Vướng mắc trong điều tra, truy tố và xét xử.</p></div></article>
+                <article class="topic-card"><span class="topic-number">03</span><div><h4>Công tác xử lý vụ án có người dưới 18 tuổi</h4><p>Lưu ý khi áp dụng quy định pháp luật.</p></div></article>
+                <article class="topic-card"><span class="topic-number">04</span><div><h4>Nâng cao chất lượng xét xử, kiểm sát và điều tra</h4><p>Trao đổi nghiệp vụ và kinh nghiệm thực tiễn.</p></div></article>
+                <article class="topic-card"><span class="topic-number">05</span><div><h4>Phòng, chống tội phạm trên không gian mạng</h4><p>Nhận diện rủi ro và hướng dẫn xử lý tình huống.</p></div></article>
+                <article class="topic-card"><span class="topic-number">06</span><div><h4>Tiếp nhận và giải quyết tin báo, tố giác về tội phạm</h4><p>Quy trình tiếp nhận, phân loại và phối hợp.</p></div></article>
+                <article class="topic-card"><span class="topic-number">07</span><div><h4>Công tác thi hành án hình sự tại cộng đồng</h4><p>Phối hợp hỗ trợ, theo dõi và tái hòa nhập.</p></div></article>
+                <article class="topic-card"><span class="topic-number">08</span><div><h4>Trợ giúp pháp lý trong hoạt động tố tụng</h4><p>Đối tượng, quy trình và cách tiếp cận dịch vụ TGPL.</p></div></article>
+            </div>
+        </section>
+    </div>
+</section>
+
+        <!-- =========================
+             HỒ SƠ GẦN ĐÂY
+        ========================== -->
+
+        <div class="card mt-4">
+
+            <div class="card-header">
+            Hồ sơ gần đây của địa bàn bạn
+            </div>
+
+            <div class="card-body">
+
+                <div class="table-responsive">
+
+                    <table class="table table-bordered table-hover">
+
+                        <thead>
+
+                            <tr>
+                                <th>Mã</th>
+                                <th>Chủ đề</th>
+                                <th>Đơn vị</th>
+                                <th>Trạng thái</th>
+                                <th>Thao tác</th>
+                            </tr>
+
+                        </thead>
+
+                        <tbody id="recentTable">
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- JavaScript của hệ thống -->
+    <script src="assets/js/config.js?v=20261004-tunnel-2"></script>
+    <script src="assets/js/api.js?v=20261009-ai-review-2"></script>
+    <script src="assets/js/auth.js?v=20261009-attendance-1"></script>
+    <script src="assets/js/app.js?v=20261005-dashboard-role-topics-1"></script>
+    <script src="assets/js/admin-notifications.js?v=20261009-ai-feedback-2"></script>
+    <script src="assets/js/registrant-notifications.js?v=20261006-reschedule-response-1"></script>
+
+</body>
+</html>

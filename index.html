@@ -1,349 +1,94 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="vi">
 <head>
-    <meta charset="UTF-8">
-
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1"
-    >
-
-    <title>Hệ thống Hội nghị TGPL Thành phố Đồng Nai</title>
-
-    <!-- Bootstrap -->
-    <link
-        rel="stylesheet"
-        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
-    >
-
-    <!-- Bootstrap Icons -->
-    <link
-        rel="stylesheet"
-        href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
-    >
-
-    <!-- CSS của hệ thống -->
-    <link
-        rel="stylesheet"
-        href="assets/css/style.css?v=20261005-topic-suggestions-1"
-    >
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Thông tin các hội nghị trợ giúp pháp lý được công khai để người dân tham dự tại thành phố Đồng Nai.">
+  <title>Hội nghị công khai · TGPL Đồng Nai</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    :root { --ink:#17324b; --teal:#087f83; --pale:#eff7f5; --gold:#d7a64a; }
+    body { color:var(--ink); background:#f7f9fb; font-family:system-ui,-apple-system,"Segoe UI",sans-serif; }
+    .public-nav { background:#fff; border-bottom:1px solid #e4ebef; }
+    .brand-mark { width:42px;height:42px;border-radius:14px;background:#e7f3f1;color:var(--teal);display:grid;place-items:center;font-size:1.25rem; }
+    .hero { background:linear-gradient(115deg,#10394d 0%,#087f83 100%); color:#fff; overflow:hidden; position:relative; }
+    .hero:after { content:"";position:absolute;width:330px;height:330px;border:1px solid #ffffff2e;border-radius:50%;right:-80px;top:-120px;box-shadow:0 0 0 38px #ffffff0d,0 0 0 78px #ffffff08; }
+    .hero-inner { position:relative;z-index:1; }
+    .eyebrow { letter-spacing:.14em;font-size:.75rem;font-weight:700;color:#f2d79e; }
+    .section-title { color:var(--ink); }
+    .event-card { border:1px solid #e5ebef;border-radius:18px;box-shadow:0 8px 24px #1834490a;height:100%;transition:transform .18s,box-shadow .18s; }
+    .event-card:hover { transform:translateY(-3px);box-shadow:0 14px 32px #18344912; }
+    .event-icon { width:44px;height:44px;border-radius:14px;display:grid;place-items:center;background:var(--pale);color:var(--teal);font-size:1.15rem; }
+    .event-meta { color:#526879;font-size:.94rem; }
+    .event-meta i { width:20px;color:var(--teal); }
+    .empty-state { border:1px dashed #b9c9d2;border-radius:18px;background:white; }
+    .registration-dialog { width:min(94vw,560px);max-height:90vh;border:0;border-radius:20px;padding:0;box-shadow:0 24px 80px #102c3d40; }
+    .registration-dialog::backdrop { background:#102c3db0;backdrop-filter:blur(3px); }
+    .registration-form label { font-weight:600;color:var(--ink); }
+    footer { color:#637687; }
+    @media(max-width:575px) { .hero h1 {font-size:2rem;} .login-label {font-size:.86rem;} }
+  </style>
 </head>
-
 <body>
-
-    <!-- =========================
-         SIDEBAR
-    ========================== -->
-
-    <div class="sidebar">
-
-        <h4 class="p-3">
-            ⚖️ TGPL
-            <br>
-            TP. Đồng Nai
-        </h4>
-
-        <a href="index.html">
-            <i class="bi bi-speedometer2"></i>
-            Dashboard
-        </a>
-
-        <a href="create-conference.html">
-            <i class="bi bi-plus-circle"></i>
-            Tạo hội nghị
-        </a>
-
-        <a href="conference-list.html">
-            <i class="bi bi-card-list"></i>
-            Danh sách hội nghị
-        </a>
-
-        <a href="analytics.html">
-            <i class="bi bi-graph-up-arrow"></i>
-            Phân tích nhu cầu (F09)
-        </a>
-
-        <a href="assignment-reports.html" class="admin-only">
-            <i class="bi bi-clipboard-data"></i>
-            Báo cáo – thống kê
-        </a>
-
+  <nav class="public-nav py-3">
+    <div class="container d-flex align-items-center justify-content-between gap-3">
+      <a href="index.html" class="d-flex align-items-center gap-2 text-decoration-none text-reset">
+        <span class="brand-mark"><i class="bi bi-bank"></i></span>
+        <span><strong class="d-block">Trợ giúp pháp lý</strong><small class="text-secondary">Thành phố Đồng Nai</small></span>
+      </a>
+      <a href="login.html?staff=1" class="btn btn-outline-primary rounded-pill px-3 login-label"><i class="bi bi-person-lock me-1"></i>Đăng nhập cán bộ, cơ quan, đơn vị</a>
     </div>
+  </nav>
 
-
-    <!-- =========================
-         NỘI DUNG CHÍNH
-    ========================== -->
-
-    <div class="content">
-
-        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
-            <h2 class="mb-0">Hệ thống Điều phối Hội nghị TGPL</h2>
-            <div class="d-flex align-items-center gap-2">
-                <div id="registrantNotificationWrap" class="position-relative" hidden>
-                    <button id="registrantNotificationButton" type="button" class="btn btn-outline-primary position-relative" aria-label="Thông báo hội nghị của đơn vị" aria-expanded="false" aria-controls="registrantNotificationPanel">
-                        <i class="bi bi-bell-fill" aria-hidden="true"></i>
-                        <span class="ms-1 d-none d-sm-inline">Thông báo</span>
-                        <span id="registrantNotificationBadge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill text-bg-danger" hidden>0</span>
-                    </button>
-                    <div id="registrantNotificationPanel" class="card shadow position-absolute end-0 mt-2" style="width:min(92vw, 480px); z-index:1050; max-height:70vh; overflow:auto;" hidden>
-                        <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
-                            Cập nhật hội nghị của đơn vị
-                            <button id="refreshRegistrantNotifications" type="button" class="btn btn-sm btn-outline-secondary" aria-label="Làm mới thông báo"><i class="bi bi-arrow-clockwise"></i></button>
-                        </div>
-                        <div id="registrantNotificationList" class="list-group list-group-flush"><div class="list-group-item text-muted">Đang tải...</div></div>
-                    </div>
-                </div>
-                <div id="adminNotificationWrap" class="admin-only position-relative" hidden>
-                    <button id="adminNotificationButton" type="button" class="btn btn-outline-primary position-relative" aria-label="Thông báo yêu cầu đang chờ" aria-expanded="false" aria-controls="adminNotificationPanel">
-                        <i class="bi bi-bell-fill" aria-hidden="true"></i>
-                        <span class="ms-1 d-none d-sm-inline">Thông báo</span>
-                        <span id="adminNotificationBadge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill text-bg-danger" hidden>0</span>
-                    </button>
-                    <div id="adminNotificationPanel" class="card shadow position-absolute end-0 mt-2" style="width:min(92vw, 440px); z-index:1050; max-height:60vh; overflow:auto;" hidden>
-                        <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
-                            Yêu cầu cần xử lý
-                            <button id="refreshAdminNotifications" type="button" class="btn btn-sm btn-outline-secondary" aria-label="Làm mới thông báo"><i class="bi bi-arrow-clockwise"></i></button>
-                        </div>
-                        <div id="adminNotificationList" class="list-group list-group-flush"><div class="list-group-item text-muted">Đang tải...</div></div>
-                    </div>
-                </div>
-                <button id="dashboardLogout" type="button" class="btn btn-outline-danger" hidden>
-                    <i class="bi bi-box-arrow-right me-1"></i>Đăng xuất
-                </button>
-            </div>
+  <header class="hero py-5 py-lg-6">
+    <div class="container hero-inner py-4 py-lg-5">
+      <div class="row align-items-center">
+        <div class="col-lg-8">
+          <div class="eyebrow mb-3">THÔNG TIN DÀNH CHO NGƯỜI DÂN</div>
+          <h1 class="display-5 fw-bold mb-3">Cùng tiếp cận thông tin,<br class="d-none d-md-block"> cùng tìm hiểu quyền được trợ giúp pháp lý</h1>
+          <p class="lead mb-0 text-white-50">Theo dõi các hội nghị được đơn vị tổ chức công khai và mở rộng cơ hội tham dự tại thành phố Đồng Nai.</p>
         </div>
-
-        <p class="text-muted">
-            Trung tâm Trợ giúp pháp lý Nhà nước
-            Thành phố Đồng Nai
-        </p>
-
-
-        <!-- =========================
-             KPI
-        ========================== -->
-
-        <div id="connectionError" class="mb-3" style="display:none;"></div>
-        <div class="alert alert-warning" role="status">
-            <strong>Bản chạy thử:</strong> dữ liệu được lưu trên backend dùng chung để các tài khoản cùng xem và xử lý. Đây là máy chủ thử nghiệm trên máy tính cá nhân nên chỉ hoạt động khi máy tính và Quick Tunnel đang chạy.
-        </div>
-
-        <section class="report-highlight mb-4" aria-labelledby="reportHeading">
-            <div class="report-heading">
-                <div>
-                    <span class="report-eyebrow"><i class="bi bi-activity"></i> BÁO CÁO NHANH</span>
-                    <h3 id="reportHeading">Tình hình 30 ngày gần nhất</h3>
-                    <p id="reportPeriod" class="mb-0">Đang tổng hợp dữ liệu…</p>
-                </div>
-                <span id="reportUpdated" class="report-updated"><i class="bi bi-arrow-repeat"></i> Tự cập nhật khi mở dashboard</span>
-            </div>
-            <div class="row g-3 mt-1">
-                <div class="col-sm-6 col-xl-3"><div class="report-kpi"><span class="report-kpi-label">Hội nghị đăng ký</span><strong id="periodRegistered">—</strong><span id="registeredChange" class="report-change">Đang tải</span><small id="registeredTotal" class="report-total"></small></div></div>
-                <div class="col-sm-6 col-xl-3"><div class="report-kpi"><span class="report-kpi-label">Đã phê duyệt</span><strong id="periodApproved">—</strong><span id="approvedChange" class="report-change">Đang tải</span><small id="approvedTotal" class="report-total"></small></div></div>
-                <div class="col-sm-6 col-xl-3"><div class="report-kpi"><span class="report-kpi-label">Đã hoàn thành</span><strong id="periodCompleted">—</strong><span id="completedChange" class="report-change">Đang tải</span><small id="completedTotal" class="report-total"></small></div></div>
-                <div class="col-sm-6 col-xl-3"><div class="report-kpi"><span class="report-kpi-label">Người dự kiến tham dự</span><strong id="periodParticipants">—</strong><span id="participantsChange" class="report-change">Đang tải</span><small id="participantsTotal" class="report-total"></small></div></div>
-            </div>
-            <div class="report-footnote"><i class="bi bi-info-circle"></i> Số liệu và biểu đồ là tổng hợp toàn hệ thống; danh sách hội nghị gần đây bên dưới chỉ gồm địa bàn của tài khoản. Tỷ lệ so sánh là biến động quan sát được, không phải kết luận về nguyên nhân.</div>
-        </section>
-
-        <section class="admin-dashboard-only" hidden>
-<h5 class="section-label mt-4">Tổng quan toàn hệ thống</h5>
-        <div class="row g-3">
-
-            <!-- Tổng hồ sơ -->
-            <div class="col-md-3">
-
-                <div class="card card-kpi bg-primary text-white">
-
-                    <div class="card-body">
-
-                        <h6>
-                            Tổng hồ sơ
-                        </h6>
-
-                        <h2 id="totalConferences">
-                            0
-                        </h2>
-
-                    </div>
-
-                </div>
-
-            </div>
-
-
-            <!-- Chờ phê duyệt -->
-            <div class="col-md-3">
-
-                <div class="card card-kpi bg-warning">
-
-                    <div class="card-body">
-
-                        <h6>
-                            Chờ phê duyệt
-                        </h6>
-
-                        <h2 id="pendingConferences">
-                            0
-                        </h2>
-
-                    </div>
-
-                </div>
-
-            </div>
-
-
-            <!-- Đã phê duyệt -->
-            <div class="col-md-3">
-
-                <div class="card card-kpi bg-success text-white">
-
-                    <div class="card-body">
-
-                        <h6>
-                            Đã phê duyệt
-                        </h6>
-
-                        <h2 id="approvedConferences">
-                            0
-                        </h2>
-
-                    </div>
-
-                </div>
-
-            </div>
-
-
-            <!-- Hoàn thành -->
-            <div class="col-md-3">
-
-                <div class="card card-kpi bg-danger text-white">
-
-                    <div class="card-body">
-
-                        <h6>
-                            Hoàn thành
-                        </h6>
-
-                        <h2 id="completedConferences">
-                            0
-                        </h2>
-
-                    </div>
-
-                </div>
-
-            </div>
-
-        </div>
-
-
-        <!-- =========================
-             BIỂU ĐỒ
-        ========================== -->
-
-        <div class="row g-3 mt-1">
-        <div class="col-lg-7">
-        <div class="card h-100">
-            <div class="card-header d-flex justify-content-between align-items-center"><span>Xu hướng đăng ký 6 tháng</span><span class="text-muted small">So với tháng liền trước</span></div>
-            <div class="card-body"><div class="chart-container"><canvas id="trendChart" aria-label="Biểu đồ xu hướng hội nghị đăng ký"></canvas></div></div>
-        </div>
-        </div>
-        <div class="col-lg-5">
-        <div class="card h-100">
-
-            <div class="card-header">
-                Tỷ trọng trạng thái toàn hệ thống
-            </div>
-
-            <div class="card-body">
-
-                <div class="chart-container"><canvas id="statusChart" aria-label="Biểu đồ trạng thái hội nghị"></canvas></div>
-
-            </div>
-
-        </div>
-        </div>
-        </div>
-        </section>
-
-        <section class="commune-dashboard-only" hidden>
-<section class="topic-suggestions mt-4 mb-4" aria-labelledby="topicSuggestionsHeading">
-            <div class="topic-suggestions-heading">
-                <div>
-                    <span class="topic-eyebrow"><i class="bi bi-lightbulb-fill me-1" aria-hidden="true"></i>GỢI Ý NỘI DUNG</span>
-                    <h3 id="topicSuggestionsHeading">Đề xuất các chủ đề đang được quan tâm</h3>
-                    <p class="mb-0">Danh sách chủ đề tham khảo để xây dựng kế hoạch và lựa chọn nội dung hội nghị.</p>
-                </div>
-            </div>
-            <div class="row g-3 mt-1">
-                <div class="col-md-6"><article class="topic-card"><span class="topic-number">01</span><div><h4>Chuyển đổi số trong hoạt động tố tụng</h4><p>Ứng dụng dữ liệu số, hồ sơ điện tử và liên thông thông tin giữa các cơ quan tiến hành tố tụng.</p></div></article></div>
-                <div class="col-md-6"><article class="topic-card"><span class="topic-number">02</span><div><h4>Phối hợp liên ngành trong giải quyết án hình sự</h4><p>Những vấn đề thường phát sinh trong quá trình điều tra – truy tố – xét xử.</p></div></article></div>
-                <div class="col-md-6"><article class="topic-card"><span class="topic-number">03</span><div><h4>Công tác xử lý vụ án có người dưới 18 tuổi</h4><p>Những điểm cần lưu ý khi áp dụng các quy định mới.</p></div></article></div>
-                <div class="col-md-6"><article class="topic-card"><span class="topic-number">04</span><div><h4>Nâng cao chất lượng xét xử, kiểm sát và điều tra</h4></div></article></div>
-                <div class="col-md-6"><article class="topic-card"><span class="topic-number">05</span><div><h4>Phòng, chống tội phạm trên không gian mạng</h4></div></article></div>
-                <div class="col-md-6"><article class="topic-card"><span class="topic-number">06</span><div><h4>Tiếp nhận và giải quyết tin báo, tố giác về tội phạm</h4></div></article></div>
-                <div class="col-md-6"><article class="topic-card"><span class="topic-number">07</span><div><h4>Công tác thi hành án hình sự tại cộng đồng</h4></div></article></div>
-                <div class="col-md-6"><article class="topic-card"><span class="topic-number">08</span><div><h4>Trợ giúp pháp lý trong hoạt động tố tụng</h4></div></article></div>
-            </div>
-        </section>
-        </section>
-
-        <!-- =========================
-             HỒ SƠ GẦN ĐÂY
-        ========================== -->
-
-        <div class="card mt-4">
-
-            <div class="card-header">
-            Hồ sơ gần đây của địa bàn bạn
-            </div>
-
-            <div class="card-body">
-
-                <div class="table-responsive">
-
-                    <table class="table table-bordered table-hover">
-
-                        <thead>
-
-                            <tr>
-                                <th>Mã</th>
-                                <th>Chủ đề</th>
-                                <th>Đơn vị</th>
-                                <th>Trạng thái</th>
-                                <th>Thao tác</th>
-                            </tr>
-
-                        </thead>
-
-                        <tbody id="recentTable">
-
-                        </tbody>
-
-                    </table>
-
-                </div>
-
-            </div>
-
-        </div>
-
+        <div class="col-lg-4 d-none d-lg-flex justify-content-end"><div class="display-1 text-white-50"><i class="bi bi-people"></i></div></div>
+      </div>
     </div>
+  </header>
 
+  <main class="container py-5">
+    <div class="d-flex flex-wrap justify-content-between align-items-end gap-3 mb-4">
+      <div><span class="eyebrow text-uppercase" style="color:var(--teal)">LỊCH HOẠT ĐỘNG</span><h2 class="section-title fw-bold mt-2 mb-1">Hội nghị mời người dân tham dự</h2><p class="text-secondary mb-0">Chỉ hiển thị hội nghị đã được phê duyệt và admin chọn công khai.</p></div>
+      <button id="refreshPublicEvents" class="btn btn-light border rounded-pill px-3"><i class="bi bi-arrow-clockwise me-1"></i>Làm mới</button>
+    </div>
+    <div id="publicEventStatus" class="text-secondary mb-3" role="status" aria-live="polite">Đang tải lịch hội nghị...</div>
+    <div id="publicEventList" class="row g-3 g-lg-4"></div>
+  </main>
 
-    <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- JavaScript của hệ thống -->
-    <script src="assets/js/config.js?v=20261004-tunnel-2"></script>
-    <script src="assets/js/api.js?v=20261006-reschedule-response-1"></script>
-    <script src="assets/js/auth.js?v=20261004-deadline-1"></script>
-    <script src="assets/js/app.js?v=20261005-dashboard-role-topics-1"></script>
-    <script src="assets/js/admin-notifications.js?v=20261006-reschedule-response-1"></script>
-    <script src="assets/js/registrant-notifications.js?v=20261006-reschedule-response-1"></script>
+  <dialog id="registrationDialog" class="registration-dialog" aria-labelledby="registrationTitle">
+    <div class="p-4 p-md-5">
+      <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+        <div><div class="eyebrow" style="color:var(--teal)">ĐĂNG KÝ THAM DỰ</div><h2 id="registrationTitle" class="h4 fw-bold mt-2 mb-1">Thông tin người tham dự</h2><p id="registrationConference" class="text-secondary mb-0"></p></div>
+        <button id="closeRegistration" type="button" class="btn-close" aria-label="Đóng biểu mẫu"></button>
+      </div>
+      <p class="small text-secondary">Mỗi người chỉ đăng ký một hội nghị trong cùng một ngày. Bạn có thể đăng ký hội nghị vào ngày khác.</p>
+      <form id="publicRegistrationForm" class="registration-form">
+        <input id="registrationConferenceId" type="hidden">
+        <div class="mb-3"><label for="attendeeName" class="form-label">Họ và tên <span class="text-danger">*</span></label><input id="attendeeName" name="full_name" class="form-control form-control-lg" maxlength="160" autocomplete="name" required></div>
+        <div class="mb-3"><label for="attendeeAddress" class="form-label">Địa chỉ <span class="text-danger">*</span></label><input id="attendeeAddress" name="address" class="form-control form-control-lg" maxlength="500" autocomplete="street-address" required></div>
+        <div class="mb-3"><label for="attendeeEmail" class="form-label">Email <span class="text-secondary fw-normal">(nếu có)</span></label><input id="attendeeEmail" name="email" type="email" class="form-control form-control-lg" maxlength="254" autocomplete="email"></div>
+        <div id="registrationMessage" class="small mb-3" role="status" aria-live="polite"></div>
+        <div class="d-flex justify-content-end gap-2"><button id="cancelRegistration" type="button" class="btn btn-light">Để sau</button><button id="submitRegistration" type="submit" class="btn btn-primary px-4">Gửi đăng ký</button></div>
+      </form>
+    </div>
+  </dialog>
 
+  <footer class="container py-4 border-top d-flex flex-wrap justify-content-between gap-2 small">
+    <span>Trung tâm Trợ giúp pháp lý Nhà nước thành phố Đồng Nai</span>
+    <span>Thông tin trên trang chỉ gồm các hội nghị được quản trị viên công khai.</span>
+  </footer>
+
+  <script src="assets/js/config.js?v=20261011-public-home-1"></script>
+  <script src="assets/js/public-home.js?v=20261011-public-attendance-1"></script>
 </body>
 </html>

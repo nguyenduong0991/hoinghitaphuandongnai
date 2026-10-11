@@ -15,7 +15,7 @@
 
     <link
         rel="stylesheet"
-        href="assets/css/style.css">
+        href="assets/css/style.css?v=20261008-shared-chat-1">
 </head>
 
 <body>
@@ -29,7 +29,7 @@
             </span>
 
             <a
-                href="index.html"
+                href="dashboard.html"
                 class="btn btn-light btn-sm">
                 Dashboard
             </a>
@@ -267,9 +267,10 @@
     <!-- JAVASCRIPT -->
 
     <script src="assets/js/config.js?v=20261004-tunnel-2"></script>
-    <script src="assets/js/api.js?v=20261006-approved-date-block-1"></script>
+    <script src="assets/js/api.js?v=20261011-manual-attendance-1"></script>
+    <script src="assets/js/attendance-tools.js?v=20261011-attendance-pages-1"></script>
     <script src="assets/js/attachments.js?v=20261005-attachment-management-2"></script>
-    <script src="assets/js/auth.js?v=20261004-deadline-1"></script>
+    <script src="assets/js/auth.js?v=20261009-attendance-1"></script>
 
 
     <script>
@@ -560,6 +561,8 @@
                         <div id="scheduleConflictPanel" class="col-12 alert alert-info admin-only mb-0" role="status" hidden>Đang kiểm tra lịch trùng...</div>
                         <div class="col-md-6"><small class="text-muted">Lý do từ chối / hủy</small><div>${escapeHtml(item.rejection_reason || item.cancel_reason || "—")}</div></div>
                         <div class="col-md-6"><small class="text-muted">Số người dự kiến</small><div>${escapeHtml(item.expected_participants ?? 0)}</div></div>
+                        ${["ADMIN", "COMMUNE"].includes(currentUser?.role) ? `<div class="col-12" id="attendanceRegistrationsPanel"><section class="card border-info-subtle"><div class="card-header bg-info-subtle"><h5 class="h6 mb-0"><i class="bi bi-person-check me-2"></i>Đơn vị đăng ký tham gia</h5></div><div id="attendanceRegistrationsList" class="card-body"><span class="text-muted">Đang tải danh sách đăng ký…</span></div></section></div>` : ""}
+                        ${currentUser?.role === "ADMIN" ? `<div class="col-12" id="publicAttendeesPanel"><section class="card border-success-subtle"><div class="card-header bg-success-subtle"><h5 class="h6 mb-0"><i class="bi bi-people me-2"></i>Người dân đăng ký tham dự</h5></div><div id="publicAttendeesList" class="card-body"><span class="text-muted">Đang tải danh sách…</span></div></section></div>` : ""}
                         <div class="col-12"><small class="text-muted">Nội dung / mục đích</small><div>${escapeHtml(item.description || "Chưa cập nhật")}</div></div>
                         <div class="col-12">
                             <small class="text-muted">Tệp đính kèm</small>
@@ -615,7 +618,15 @@
                             </section>
                         </div>` : ""}
                         <div class="col-12"><small class="text-muted">Lịch sử xử lý</small><div id="statusHistory" class="mt-2"><span class="text-muted">Đang tải...</span></div></div>
-                        ${currentUser?.role === "ADMIN" ? `<div class="col-12 border-top pt-3 d-flex flex-wrap align-items-end gap-2">
+                        ${currentUser?.role === "ADMIN" ? `<div class="col-12 border-top pt-3">
+                            <section class="card border-success-subtle mb-3">
+                                <div class="card-body d-flex flex-wrap align-items-center justify-content-between gap-3">
+                                    <div><label class="form-check-label fw-semibold" for="publicConferenceToggle"><i class="bi bi-globe2 me-2 text-success"></i>Công khai hội nghị cho người dân</label><div class="form-text">Chỉ hội nghị đã phê duyệt và chưa kết thúc mới có thể xuất hiện trên trang chủ công khai.</div></div>
+                                    <div class="d-flex align-items-center gap-2"><div class="form-check form-switch mb-0"><input id="publicConferenceToggle" class="form-check-input" type="checkbox" role="switch" ${item.is_public ? "checked" : ""} ${item.status !== "APPROVED" && !item.is_public ? "disabled" : ""}></div><button id="savePublicVisibility" type="button" class="btn btn-sm btn-outline-success">Cập nhật công khai</button></div>
+                                    <span id="publicVisibilityMessage" class="small" role="status" aria-live="polite"></span>
+                                </div>
+                            </section>
+                        </div><div class="col-12 d-flex flex-wrap align-items-end gap-2">
                             <div><label for="statusEdit" class="form-label mb-1">Cập nhật trạng thái</label><select id="statusEdit" class="form-select">
                                 <option value="PENDING">Chờ phê duyệt</option><option value="APPROVED">Đã phê duyệt</option><option value="COMPLETED">Hoàn thành</option><option value="REJECTED">Từ chối</option><option value="CANCELLED">Đã hủy</option><option value="RESCHEDULED">Đề xuất dời lịch</option>
                             </select></div>
@@ -643,10 +654,26 @@
                     const proposedEndInput = document.getElementById("proposedEndTime");
                     [proposedStartInput, proposedEndInput].forEach(input => input.addEventListener("change", () => checkProposedDateAvailability(item.id, input)));
                     document.getElementById("rescheduleNote").value = item.reschedule_note || "";
-                    document.getElementById("rescheduleFields").hidden = item.status !== "RESCHEDULED";
+                    document.getElementById("savePublicVisibility").addEventListener("click", async () => {
+                        const button = document.getElementById("savePublicVisibility");
+                        const checkbox = document.getElementById("publicConferenceToggle");
+                        const message = document.getElementById("publicVisibilityMessage");
+                        button.disabled = true;
+                        message.textContent = "Đang lưu...";
+                        try {
+                            const updated = await updateConferencePublicVisibility(item.id, checkbox.checked);
+                            item.is_public = updated.data?.is_public ?? checkbox.checked;
+                            message.textContent = item.is_public ? "Hội nghị đã được công khai trên trang chủ." : "Hội nghị đã được ẩn khỏi trang chủ công khai.";
+                            checkbox.disabled = !item.is_public && (document.getElementById("statusEdit").value !== "APPROVED");
+                        } catch (error) {
+                            message.textContent = error.message || "Không cập nhật được trạng thái công khai.";
+                            checkbox.checked = Boolean(item.is_public);
+                        } finally { button.disabled = false; }
+                    });
                     document.getElementById("statusEdit").addEventListener("change", event => {
                         document.getElementById("rescheduleFields").hidden = event.target.value !== "RESCHEDULED";
                     });
+                    document.getElementById("rescheduleFields").hidden = item.status !== "RESCHEDULED";
                     document.getElementById("saveStatus").addEventListener("click", () => saveConferenceStatus(item.id));
                 }
                 document.getElementById("uploadAttachmentsButton").addEventListener("click", () => addConferenceAttachments(item.id));
@@ -660,8 +687,95 @@
                 }
                 renderConferenceAttachments(item.id);
                 renderStatusHistory(item.id);
+                if (["ADMIN", "COMMUNE"].includes(currentUser?.role)) renderAttendanceRegistrations(item.id);
+                if (currentUser?.role === "ADMIN") renderPublicAttendees(item);
             } catch (error) {
                 body.innerHTML = `<div class="alert alert-danger mb-0">${escapeHtml(error.message || "Không tải được chi tiết hội nghị.")}</div>`;
+            }
+        }
+
+        async function renderAttendanceRegistrations(conferenceId) {
+            const container = document.getElementById("attendanceRegistrationsList");
+            if (!container) return;
+            try {
+                const result = await getConferenceAttendanceRegistrations(conferenceId);
+                const rows = result.data || [];
+                container.innerHTML = rows.length
+                    ? `<div class="table-responsive"><table class="table table-sm align-middle mb-0"><thead><tr><th>Đơn vị tham dự</th><th>Người đăng ký</th><th class="text-end">Số người dự kiến</th><th>Ghi chú</th></tr></thead><tbody>${rows.map(row => `<tr><td>${escapeHtml(row.organization_name || "")}</td><td>${escapeHtml(row.registered_by_name || "")}</td><td class="text-end">${Number(row.expected_count || 0).toLocaleString("vi-VN")}</td><td>${escapeHtml(row.note || "—")}</td></tr>`).join("")}</tbody><tfoot><tr class="fw-semibold"><td colspan="2">Tổng dự kiến</td><td class="text-end">${rows.reduce((sum, row) => sum + Number(row.expected_count || 0), 0).toLocaleString("vi-VN")}</td><td>${rows.length} đơn vị</td></tr></tfoot></table></div>`
+                    : '<p class="text-muted mb-0">Chưa có đơn vị nào đăng ký tham gia.</p>';
+            } catch (error) {
+                container.innerHTML = `<p class="text-muted mb-0">${escapeHtml(error.message || "Không tải được danh sách đăng ký.")}</p>`;
+            }
+        }
+
+        async function renderPublicAttendees(conference) {
+            const container = document.getElementById("publicAttendeesList");
+            if (!container) return;
+            try {
+                const result = await getPublicConferenceAttendees(conference.id);
+                const rows = result.data || [];
+                const conferenceCompleted = conference.status === "COMPLETED";
+                container.innerHTML = `<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2"><strong>${escapeHtml(conference.code || "")} · ${escapeHtml(conference.title || "Hội nghị")}</strong><div class="d-flex gap-2"><button id="addManualPublicAttendee" type="button" class="btn btn-sm btn-outline-primary" ${conferenceCompleted ? "disabled" : ""}>${conferenceCompleted ? "Hội nghị đã hoàn thành" : "Điểm danh người chưa đăng ký"}</button><button id="exportPublicAttendees" type="button" class="btn btn-sm btn-outline-success" ${rows.length ? "" : "disabled"}>Xuất Excel</button></div></div><form id="manualPublicAttendeeForm" class="row g-2 align-items-end mb-3" hidden><div class="col-md-4"><label class="form-label small">Họ và tên *</label><input class="form-control form-control-sm" name="attendee_name" maxlength="160" required></div><div class="col-md-4"><label class="form-label small">Địa chỉ *</label><input class="form-control form-control-sm" name="attendee_address" maxlength="500" required></div><div class="col-md-3"><label class="form-label small">Email (nếu có)</label><input class="form-control form-control-sm" name="attendee_email" type="email" maxlength="254"></div><div class="col-md-1"><button class="btn btn-sm btn-primary w-100" type="submit">Lưu</button></div></form><div id="manualPublicAttendeeMessage" class="small mb-2" role="status" aria-live="polite"></div>${rows.length
+                    ? `<div class="d-flex flex-wrap align-items-center gap-2 mb-2"><input id="searchPublicAttendees" type="search" class="form-control form-control-sm" style="max-width:360px" placeholder="Tìm theo họ tên người đăng ký" aria-label="Tìm tên người đăng ký"><span id="publicAttendeesSearchCount" class="small text-muted">${rows.length} người</span></div><div class="table-responsive"><table class="table table-sm align-middle mb-0"><thead><tr><th>Đã dự</th><th>Họ và tên</th><th>Địa chỉ</th><th>Email</th><th>Thời điểm đăng ký</th></tr></thead><tbody>${rows.map(row => `<tr data-attendee-name="${escapeHtml(row.attendee_name)}"><td><input type="checkbox" class="form-check-input public-attendance-checkin" data-registration-id="${escapeHtml(row.id)}" aria-label="Điểm danh ${escapeHtml(row.attendee_name)}" ${row.attended_at ? "checked" : ""}></td><td>${escapeHtml(row.attendee_name)}</td><td>${escapeHtml(row.attendee_address)}</td><td>${escapeHtml(row.attendee_email || "—")}</td><td>${escapeHtml(formatDateTime(row.created_at))}</td></tr>`).join("")}</tbody></table></div><div id="publicAttendeesPagination" class="d-flex flex-wrap justify-content-end align-items-center gap-2 mt-2 ${rows.length > 5 ? "" : "d-none"}"><span id="publicAttendeesPageInfo" class="small text-muted me-2"></span><button id="publicAttendeesPrevious" type="button" class="btn btn-sm btn-outline-secondary">Trước</button><button id="publicAttendeesNext" type="button" class="btn btn-sm btn-outline-secondary">Tiếp</button></div><div id="publicAttendanceCheckinMessage" class="small mt-2" role="status" aria-live="polite"></div><p class="small text-secondary mt-2 mb-0">Tổng cộng ${rows.length.toLocaleString("vi-VN")} người.</p>`
+                    : '<p class="text-muted mb-0">Chưa có người dân đăng ký tham dự.</p>'}`;
+                document.getElementById("exportPublicAttendees").addEventListener("click", () => window.downloadConferenceAttendanceExcel(conference.code, conference.title, rows));
+                const manualButton = document.getElementById("addManualPublicAttendee");
+                const manualForm = document.getElementById("manualPublicAttendeeForm");
+                manualButton.addEventListener("click", () => { manualForm.hidden = !manualForm.hidden; });
+                manualForm.addEventListener("submit", async event => {
+                    event.preventDefault();
+                    const submit = manualForm.querySelector('[type="submit"]');
+                    const message = document.getElementById("manualPublicAttendeeMessage");
+                    submit.disabled = true;
+                    message.className = "small mb-2 text-muted";
+                    message.textContent = "Đang lưu người tham dự…";
+                    try {
+                        await createManualConferenceAttendee(conference.id, Object.fromEntries(new FormData(manualForm).entries()));
+                        await renderPublicAttendees(conference);
+                        const savedMessage = document.getElementById("manualPublicAttendeeMessage");
+                        savedMessage.className = "small mb-2 text-success";
+                        savedMessage.textContent = "Đã thêm và ghi nhận người này đã dự hội nghị.";
+                    } catch (error) {
+                        message.className = "small mb-2 text-danger";
+                        message.textContent = error.message || "Không thêm được người tham dự.";
+                        submit.disabled = false;
+                    }
+                });
+                const search = document.getElementById("searchPublicAttendees");
+                let attendancePage = 1;
+                const updateAttendancePage = () => {
+                    const state = window.paginateAttendanceRows(container.querySelector("tbody"), search?.value || "", attendancePage, 5);
+                    attendancePage = state.page;
+                    const info = document.getElementById("publicAttendeesPageInfo");
+                    const previous = document.getElementById("publicAttendeesPrevious");
+                    const next = document.getElementById("publicAttendeesNext");
+                    const pagination = document.getElementById("publicAttendeesPagination");
+                    if (pagination) pagination.classList.toggle("d-none", state.total <= 5);
+                    if (info) info.textContent = state.total ? `${state.start}–${state.end} / ${state.total} người` : "0 người";
+                    if (previous) previous.disabled = state.page <= 1;
+                    if (next) next.disabled = state.page >= state.pageCount;
+                    const count = document.getElementById("publicAttendeesSearchCount");
+                    if (count) count.textContent = search?.value ? `${state.total} kết quả` : `${rows.length} người`;
+                };
+                if (search) search.addEventListener("input", () => { attendancePage = 1; updateAttendancePage(); });
+                document.getElementById("publicAttendeesPrevious")?.addEventListener("click", () => { attendancePage--; updateAttendancePage(); });
+                document.getElementById("publicAttendeesNext")?.addEventListener("click", () => { attendancePage++; updateAttendancePage(); });
+                if (rows.length) updateAttendancePage();
+                container.querySelectorAll(".public-attendance-checkin").forEach(checkbox => checkbox.addEventListener("change", async () => {
+                    checkbox.disabled = true;
+                    const message = document.getElementById("publicAttendanceCheckinMessage");
+                    try {
+                        const result = await updatePublicAttendanceCheckIn(checkbox.dataset.registrationId, checkbox.checked);
+                        message.className = "small mt-2 text-success";
+                        message.textContent = result.message || "Đã cập nhật điểm danh.";
+                    } catch (error) {
+                        checkbox.checked = !checkbox.checked;
+                        message.className = "small mt-2 text-danger";
+                        message.textContent = error.message || "Không cập nhật được điểm danh.";
+                    } finally { checkbox.disabled = false; }
+                }));
+            } catch (error) {
+                container.textContent = error.message || "Không tải được danh sách người đăng ký.";
             }
         }
 
@@ -964,6 +1078,14 @@
                     };
                 }
                 const result = await updateConferenceStatus(id, status, reason, scheduleProposal);
+                const publicToggle = document.getElementById("publicConferenceToggle");
+                if (publicToggle && result.data) {
+                    publicToggle.checked = Boolean(result.data.is_public);
+                    publicToggle.disabled = result.data.status !== "APPROVED" && !result.data.is_public;
+                    document.getElementById("publicVisibilityMessage").textContent = result.data.is_public
+                        ? "Hội nghị đã được công khai trên trang chủ."
+                        : "Hội nghị chưa công khai; chỉ admin có thể bật sau khi phê duyệt.";
+                }
                 document.getElementById("detailStatusBadge").innerHTML = getStatusBadge(result.data?.status || document.getElementById("statusEdit").value);
                 if (result.data?.start_time) document.getElementById("conferenceStartTime").textContent = formatDateTime(result.data.start_time);
                 if (result.data?.end_time) document.getElementById("conferenceEndTime").textContent = formatDateTime(result.data.end_time);

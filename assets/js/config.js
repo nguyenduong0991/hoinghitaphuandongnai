@@ -1,7 +1,9 @@
-// The web repository is separate from D:\DuAnTGPL\backend.
-// Local development uses the isolated demo backend on port 3001. The public
-// GitHub Pages site calls the temporary Cloudflare Quick Tunnel below.
-const isLocalHost = ["localhost", "127.0.0.1"].includes(window.location.hostname);
-window.TGPL_API_BASE_URL = window.TGPL_API_BASE_URL || (isLocalHost
-    ? "http://localhost:3001/api"
-    : "https://command-type-angeles-laptop.trycloudflare.com/api");
+// Localhost and LAN access use the backend on the same computer. GitHub Pages
+// keeps its separate public tunnel setting for the published demo.
+const isGitHubPages = window.location.hostname.endsWith(".github.io");
+const localBackendHost = ["localhost", "127.0.0.1"].includes(window.location.hostname)
+    ? "localhost"
+    : window.location.hostname;
+window.TGPL_API_BASE_URL = window.TGPL_API_BASE_URL || (isGitHubPages
+    ? "https://command-type-angeles-laptop.trycloudflare.com/api"
+    : `${window.location.protocol}//${localBackendHost}:3001/api`);

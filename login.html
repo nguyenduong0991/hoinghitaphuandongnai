@@ -36,26 +36,40 @@
         <p class="text-center text-muted small mt-3">Vai trò admin xử lý duyệt hội nghị và quản lý tài khoản.</p>
     </main>
     <script src="assets/js/config.js?v=20261004-tunnel-2"></script>
-    <script src="assets/js/api.js?v=20261003-reschedule-1"></script>
+    <script src="assets/js/api.js?v=20261009-survey-1"></script>
     <script>
         const message = document.getElementById("authMessage");
         const loginPanel = document.getElementById("loginPanel");
         const setupPanel = document.getElementById("setupPanel");
-        const returnTo = new URLSearchParams(location.search).get("return");
+        const loginParams = new URLSearchParams(location.search);
+        const returnTo = loginParams.get("return");
+        const publicReturnPaths = new Set(["/", "/index.html", "/hoinghitaphuandongnai/", "/hoinghitaphuandongnai/index.html"]);
+        const isPublicReturn = returnTo && publicReturnPaths.has(returnTo);
+        const staffLoginRequested = loginParams.get("staff") === "1" || (Boolean(returnTo) && !isPublicReturn);
         const safeReturn = returnTo && returnTo.startsWith("/") && !returnTo.startsWith("//") && !returnTo.includes("login.html")
-            ? returnTo : "index.html";
+            ? returnTo : "dashboard.html";
 
         function showMessage(text, type = "danger") {
             message.className = `alert alert-${type}`;
             message.textContent = text;
             message.hidden = false;
         }
+        function clearAiChatHistory(user) {
+            if (!user) return;
+            const key = String(user.id || user.username || user.email || user.role).toLowerCase().replace(/[^a-z0-9_-]/g, "_");
+            localStorage.removeItem(`tgpl.ai.conversation.${key}`);
+        }
         function saveSession(result) {
+            clearAiChatHistory(result.user);
             localStorage.setItem("tgpl.accessToken", result.token);
             localStorage.setItem("tgpl.user", JSON.stringify(result.user));
             location.replace(safeReturn);
         }
         async function initialize() {
+            if (!staffLoginRequested) {
+                location.replace("index.html");
+                return;
+            }
             if (!window.TGPL_AUTH_ENABLED) {
                 showMessage("Chưa cấu hình API dùng chung. Hãy mở ứng dụng tại localhost hoặc cấu hình API của backend.", "warning");
                 return;

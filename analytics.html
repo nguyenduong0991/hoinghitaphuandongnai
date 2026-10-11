@@ -5,20 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Phân tích nhu cầu TGPL - Đồng Nai</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="assets/css/style.css?v=20261003-long-report-1">
+    <link rel="stylesheet" href="assets/css/style.css?v=20261008-shared-chat-1">
 </head>
 <body>
     <nav class="navbar navbar-dark bg-primary"><div class="container-fluid">
         <span class="navbar-brand mb-0 h1">Phân tích nhu cầu & dự báo TGPL</span>
-        <a href="index.html" class="btn btn-light btn-sm">Dashboard</a>
+        <a href="dashboard.html" class="btn btn-light btn-sm">Dashboard</a>
     </div></nav>
     <main class="container-fluid py-4">
         <div class="d-flex flex-wrap justify-content-between align-items-end gap-3 mb-3">
             <div><h2 class="mb-1">Báo cáo, thống kê & phân tích hội nghị</h2><p class="text-muted mb-0">Chọn chu kỳ báo cáo, xem bảng tổng hợp theo dữ liệu đã ghi nhận và tải báo cáo đánh giá dạng Word.</p><small id="lastUpdated" class="text-muted">Đang tải số liệu...</small></div>
             <div class="d-flex flex-wrap align-items-end gap-2 report-period-controls admin-only">
-                <div><label for="periodPreset" class="form-label mb-1">Chu kỳ</label><select id="periodPreset" class="form-select"><option value="1">1 năm</option><option value="5">5 năm</option><option value="10">10 năm</option><option value="custom">Tùy chọn năm</option></select></div>
-                <div><label for="startYear" class="form-label mb-1">Từ năm</label><input type="number" id="startYear" min="2000" max="2100" class="form-control" style="width:110px"></div>
-                <div><label for="endYear" class="form-label mb-1">Đến năm</label><input type="number" id="endYear" min="2000" max="2100" class="form-control" style="width:110px"></div>
+                <div><label for="periodPreset" class="form-label mb-1">Chu kỳ</label><select id="periodPreset" class="form-select"><option value="1">1 năm</option><option value="5">5 năm</option><option value="10">10 năm</option><option value="custom">Tùy chọn năm</option><option value="monthly">Theo tháng</option></select></div>
+                <div id="yearStartWrap"><label for="startYear" class="form-label mb-1">Từ năm</label><input type="number" id="startYear" min="2000" max="2100" class="form-control" style="width:110px"></div>
+                <div id="yearEndWrap"><label for="endYear" class="form-label mb-1">Đến năm</label><input type="number" id="endYear" min="2000" max="2100" class="form-control" style="width:110px"></div>
+                <div id="monthStartWrap" hidden><label for="startMonth" class="form-label mb-1">Từ tháng</label><input type="month" id="startMonth" class="form-control"></div>
+                <div id="monthEndWrap" hidden><label for="endMonth" class="form-label mb-1">Đến tháng</label><input type="month" id="endMonth" class="form-control"></div>
                 <button id="refreshButton" class="btn btn-primary">Cập nhật</button>
                 <button id="downloadWordButton" class="btn btn-success"><i class="bi bi-file-earmark-word"></i> Tải báo cáo Word</button>
             </div>
@@ -83,14 +85,16 @@
     </main>
     <script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>
     <script src="assets/js/config.js?v=20261004-tunnel-2"></script>
-    <script src="assets/js/api.js?v=20261004-deadline-1"></script>
-    <script src="assets/js/auth.js?v=20261004-deadline-1"></script>
+    <script src="assets/js/api.js?v=20261009-survey-1"></script>
+    <script src="assets/js/auth.js?v=20261009-ai-review-1"></script>
     <script>
         const dateTo = document.getElementById("toDate");
         const dateFrom = document.getElementById("fromDate");
         const periodPreset = document.getElementById("periodPreset");
         const startYearInput = document.getElementById("startYear");
         const endYearInput = document.getElementById("endYear");
+        const startMonthInput = document.getElementById("startMonth");
+        const endMonthInput = document.getElementById("endMonth");
         const message = document.getElementById("pageMessage");
         const monthNow = new Date();
         const localDateString = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -99,9 +103,38 @@
         let latestConferences = [];
         endYearInput.value = monthNow.getFullYear();
         startYearInput.value = monthNow.getFullYear();
+        startMonthInput.value = localDateString(new Date(monthNow.getFullYear(), monthNow.getMonth(), 1)).slice(0, 7);
+        endMonthInput.value = startMonthInput.value;
         document.getElementById("metricMonth").value = localDateString(monthNow).slice(0, 7);
 
+        function reportPeriodLabel() {
+            if (periodPreset.value === "monthly") {
+                const label = value => { const [year, month] = value.split("-"); return `${month}/${year}`; };
+                return startMonthInput.value === endMonthInput.value
+                    ? `tháng ${label(startMonthInput.value)}` : `từ ${label(startMonthInput.value)} đến ${label(endMonthInput.value)}`;
+            }
+            return startYearInput.value === endYearInput.value
+                ? `năm ${startYearInput.value}` : `từ năm ${startYearInput.value} đến năm ${endYearInput.value}`;
+        }
+        function updatePeriodControlVisibility() {
+            const monthly = periodPreset.value === "monthly";
+            document.getElementById("yearStartWrap").hidden = monthly;
+            document.getElementById("yearEndWrap").hidden = monthly;
+            document.getElementById("monthStartWrap").hidden = !monthly;
+            document.getElementById("monthEndWrap").hidden = !monthly;
+        }
         function applyReportPeriod() {
+            if (periodPreset.value === "monthly") {
+                if (!/^\d{4}-\d{2}$/.test(startMonthInput.value) || !/^\d{4}-\d{2}$/.test(endMonthInput.value) || startMonthInput.value > endMonthInput.value) {
+                    setMessage("Vui lòng chọn khoảng tháng hợp lệ; tháng bắt đầu không được sau tháng kết thúc.");
+                    return false;
+                }
+                const [year, month] = endMonthInput.value.split("-").map(Number);
+                dateFrom.value = `${startMonthInput.value}-01`;
+                dateTo.value = `${endMonthInput.value}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}`;
+                setMessage(`Đang xem báo cáo ${reportPeriodLabel()}.`, "info");
+                return true;
+            }
             const endYear = Number(endYearInput.value);
             const years = Number(periodPreset.value);
             if (!Number.isInteger(endYear) || endYear < 2000 || endYear > 2100) return false;
@@ -113,15 +146,19 @@
             }
             dateFrom.value = `${startYear}-01-01`;
             dateTo.value = `${endYear}-12-31`;
-            setMessage(`Đang xem báo cáo từ năm ${startYear} đến năm ${endYear}.`, "info");
+            setMessage(`Đang xem báo cáo ${reportPeriodLabel()}.`, "info");
             return true;
         }
         periodPreset.addEventListener("change", () => {
+            updatePeriodControlVisibility();
             if (periodPreset.value === "custom") startYearInput.value = startYearInput.value || endYearInput.value;
             if (applyReportPeriod()) loadAnalysis();
         });
         endYearInput.addEventListener("change", () => { if (applyReportPeriod()) loadAnalysis(); });
         startYearInput.addEventListener("change", () => { periodPreset.value = "custom"; if (applyReportPeriod()) loadAnalysis(); });
+        startMonthInput.addEventListener("change", () => { if (periodPreset.value === "monthly" && applyReportPeriod()) loadAnalysis(); });
+        endMonthInput.addEventListener("change", () => { if (periodPreset.value === "monthly" && applyReportPeriod()) loadAnalysis(); });
+        updatePeriodControlVisibility();
         applyReportPeriod();
 
         function setMessage(text, type = "danger") {
@@ -151,6 +188,12 @@
             });
         }
         const fmt = value => new Intl.NumberFormat("vi-VN").format(Number(value || 0));
+        function isWithinReportPeriod(value) {
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return false;
+            const key = date.toLocaleDateString("sv-SE", { timeZone: "Asia/Ho_Chi_Minh" });
+            return key >= dateFrom.value && key <= dateTo.value;
+        }
 
         async function loadAnalysis() {
             const button = document.getElementById("refreshButton"); button.disabled = true;
@@ -197,12 +240,7 @@
                     ? "Dự báo chỉ hiển thị khi có ít nhất 3 kỳ báo cáo. Kỳ thiếu dữ liệu được giữ là thiếu, không tính thành 0."
                     : `Ước lượng tham khảo cho ${forecast.month}: ${fmt(forecast.value)} lượt tiếp cận; mô hình xu hướng tuyến tính dựa trên ${forecast.basis_months} kỳ có báo cáo.`;
                 addRows("recommendationRows", data.recommendations || [], [v=>({HIGH:"Ưu tiên cao",REVIEW:"Rà soát",COLLECT_DATA:"Bổ sung dữ liệu",MONITOR:"Theo dõi"}[v.priority] || v.priority), v=>v.organization_name, v=>v.reason], "Chưa có gợi ý.");
-                const periodStart = new Date(Number(startYearInput.value), 0, 1);
-                const periodEnd = new Date(Number(endYearInput.value) + 1, 0, 1);
-                const impactRows = latestImpactData.filter(value => {
-                    const date = new Date(value.start_time);
-                    return date >= periodStart && date < periodEnd;
-                }).map(value => ({
+                const impactRows = latestImpactData.filter(value => isWithinReportPeriod(value.start_time)).map(value => ({
                     conference: `${value.code} · ${value.title}`,
                     organization: value.organization_name,
                     before: `${fmt(value.before_contacts)} (${value.before_periods} kỳ)`,
@@ -241,16 +279,9 @@
             const data = latestAnalysisData;
             const areas = data.areas || [];
             const statuses = data.status_counts || {};
-            const confStart = new Date(Number(startYearInput.value), 0, 1);
-            const confEnd = new Date(Number(endYearInput.value) + 1, 0, 1);
-            const conferences = latestConferences.filter(item => {
-                const date = new Date(item.start_time);
-                return date >= confStart && date < confEnd;
-            }).sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
-            const impacts = latestImpactData.filter(item => {
-                const date = new Date(item.start_time);
-                return date >= confStart && date < confEnd;
-            });
+            const conferences = latestConferences.filter(item => isWithinReportPeriod(item.start_time))
+                .sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
+            const impacts = latestImpactData.filter(item => isWithinReportPeriod(item.start_time));
             const total = key => areas.reduce((sum, area) => sum + Number(area[key] || 0), 0);
             const topArea = [...areas].filter(area => area.conference_count > 0).sort((a, b) => b.conference_count - a.conference_count)[0];
             const highDemandArea = [...areas].filter(area => area.reporting_periods > 0).sort((a, b) => b.contacts_count - a.contacts_count)[0];
@@ -261,7 +292,7 @@
                 ? `${(((Number(lastTrend.contacts) - Number(firstTrend.contacts)) / Number(firstTrend.contacts)) * 100).toFixed(1)}% (${firstTrend.month} đến ${lastTrend.month})`
                 : "Chưa đủ kỳ số liệu để tính tỷ lệ";
             const reportRows = [
-                ["Khoảng báo cáo", `${startYearInput.value}–${endYearInput.value}`],
+                ["Khoảng báo cáo", reportPeriodLabel()],
                 ["Tổng hội nghị theo ngày tổ chức", wordNumber(conferences.length)],
                 ["Đã phê duyệt / đã hoàn thành / đang chờ", `${wordNumber(statuses.approved_count)} / ${wordNumber(statuses.completed_count)} / ${wordNumber(statuses.pending_count)}`],
                 ["Số người dự kiến / thực tế tham dự", `${wordNumber(total("expected_participants"))} / ${wordNumber(total("actual_participants"))}`],
@@ -273,10 +304,10 @@
             ];
             const children = [
                 new docx.Paragraph({ text: "BÁO CÁO TỔNG HỢP, THỐNG KÊ VÀ ĐÁNH GIÁ HỘI NGHỊ TRỢ GIÚP PHÁP LÝ", heading: docx.HeadingLevel.TITLE, alignment: docx.AlignmentType.CENTER }),
-                new docx.Paragraph({ text: `Kỳ báo cáo: từ năm ${startYearInput.value} đến năm ${endYearInput.value}`, alignment: docx.AlignmentType.CENTER }),
+                new docx.Paragraph({ text: `Kỳ báo cáo: ${reportPeriodLabel()}`, alignment: docx.AlignmentType.CENTER }),
                 new docx.Paragraph({ text: `Ngày lập: ${new Date().toLocaleDateString("vi-VN")}`, alignment: docx.AlignmentType.CENTER }),
                 wordHeading(docx, "1. Đánh giá khái quát"),
-                new docx.Paragraph({ text: `Trong giai đoạn ${startYearInput.value}–${endYearInput.value}, hệ thống ghi nhận ${wordNumber(conferences.length)} hội nghị theo ngày tổ chức. Có ${wordNumber(statuses.completed_count)} hội nghị hoàn thành, ${wordNumber(statuses.approved_count)} hội nghị được phê duyệt và ${wordNumber(statuses.pending_count)} hồ sơ đang chờ xử lý. Tổng số người dự kiến tham dự là ${wordNumber(total("expected_participants"))}; số người tham dự thực tế đã được cập nhật là ${wordNumber(total("actual_participants"))}.` }),
+                new docx.Paragraph({ text: `Trong ${reportPeriodLabel()}, hệ thống ghi nhận ${wordNumber(conferences.length)} hội nghị theo ngày tổ chức. Có ${wordNumber(statuses.completed_count)} hội nghị hoàn thành, ${wordNumber(statuses.approved_count)} hội nghị được phê duyệt và ${wordNumber(statuses.pending_count)} hồ sơ đang chờ xử lý. Tổng số người dự kiến tham dự là ${wordNumber(total("expected_participants"))}; số người tham dự thực tế đã được cập nhật là ${wordNumber(total("actual_participants"))}.` }),
                 new docx.Paragraph({ text: `Dữ liệu tiếp cận TGPL ghi nhận ${wordNumber(total("contacts_count"))} lượt tiếp cận, ${wordNumber(total("referrals_count"))} lượt chuyển gửi và ${wordNumber(total("cases_count"))} vụ việc. Có ${wordNumber(areas.filter(area => area.reporting_periods > 0).length)} trên ${wordNumber(areas.length)} địa bàn có ít nhất một kỳ báo cáo tiếp cận trong khoảng chọn.` }),
                 new docx.Paragraph({ text: `So sánh các kỳ có dữ liệu đầu tiên và gần nhất cho thấy biến động lượt tiếp cận là ${trendChange}. Số liệu này mô tả thay đổi được ghi nhận, không tự chứng minh hội nghị là nguyên nhân duy nhất.` }),
                 wordHeading(docx, "2. Các chỉ tiêu chính", "HEADING_2"), wordTable(docx, ["Chỉ tiêu", "Kết quả"], reportRows),
@@ -307,7 +338,7 @@
                 const link = document.createElement("a");
                 const downloadUrl = URL.createObjectURL(blob);
                 link.href = downloadUrl;
-                link.download = `Bao-cao-hoi-nghi-TGPL-${startYearInput.value}-${endYearInput.value}.docx`;
+                link.download = `Bao-cao-hoi-nghi-TGPL-${dateFrom.value}-${dateTo.value}.docx`;
                 link.click();
                 window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
             });
@@ -316,7 +347,7 @@
         document.getElementById("downloadWordButton").addEventListener("click", async () => {
             const button = document.getElementById("downloadWordButton");
             button.disabled = true;
-            try { await generateNarrativeReport(); setMessage("Đã tạo file báo cáo Word theo khoảng năm đang chọn.", "success"); }
+            try { await generateNarrativeReport(); setMessage(`Đã tạo file báo cáo Word ${reportPeriodLabel()}.`, "success"); }
             catch (error) { setMessage(error.message || "Không tạo được báo cáo Word."); }
             finally { button.disabled = false; }
         });

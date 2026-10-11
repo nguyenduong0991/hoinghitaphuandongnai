@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Phiếu khảo sát nhu cầu hội nghị · TGPL</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="assets/css/style.css?v=20261009-survey-1">
+</head>
+<body>
+  <nav class="navbar navbar-dark bg-primary"><div class="container-fluid"><a class="navbar-brand" href="dashboard.html">⚖️ TGPL · TP. Đồng Nai</a><a class="btn btn-sm btn-outline-light" href="dashboard.html">Về Dashboard</a></div></nav>
+  <main class="container py-4" style="max-width:960px">
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3"><div><h1 class="h3">Phiếu khảo sát nhu cầu</h1><p class="text-muted mb-0">Ý kiến của đơn vị giúp ưu tiên địa bàn, nhóm người cần trợ giúp pháp lý và nội dung tập huấn.</p></div><span id="organizationName" class="badge text-bg-primary fs-6"></span></div>
+    <div id="surveyMessage" aria-live="polite"></div>
+    <form id="needSurveyForm" class="card shadow-sm"><div class="card-body p-4">
+      <div class="row g-3">
+        <div class="col-md-6"><label class="form-label" for="surveyStage">Thời điểm khảo sát</label><select id="surveyStage" name="survey_stage" class="form-select"><option value="NEED">Đăng ký nhu cầu / trước hội nghị</option><option value="AFTER_EVENT">Đánh giá sau hội nghị</option></select></div>
+        <div class="col-md-6"><label class="form-label" for="conferenceId">Hội nghị liên quan (nếu có)</label><select id="conferenceId" name="conference_id" class="form-select"><option value="">Chưa gắn với hội nghị cụ thể</option></select></div>
+        <div class="col-12"><label class="form-label" for="legalAidNeed">Nhu cầu trợ giúp pháp lý tại địa bàn</label><textarea id="legalAidNeed" name="legal_aid_need" class="form-control" rows="3" placeholder="Vấn đề pháp lý, nhóm người cần hỗ trợ, khó khăn khi tiếp cận dịch vụ…"></textarea></div>
+        <div class="col-md-6"><label class="form-label" for="conferenceNeed">Nhu cầu tổ chức hội nghị</label><select id="conferenceNeed" name="conference_need" class="form-select"><option value="false">Chưa có nhu cầu cụ thể</option><option value="true">Có nhu cầu tổ chức</option></select></div>
+        <div class="col-md-6"><label class="form-label" for="trainingNeed">Nhu cầu tập huấn quy định pháp luật</label><textarea id="trainingNeed" name="training_need" class="form-control" rows="2" placeholder="Quy định mới hoặc nghiệp vụ cần được hướng dẫn"></textarea></div>
+        <div class="col-md-6"><label class="form-label" for="suggestedArea">Địa bàn đề xuất tổ chức</label><input id="suggestedArea" name="suggested_area" class="form-control" maxlength="300" placeholder="Xã/phường, khu vực hoặc địa điểm ưu tiên"></div>
+        <div class="col-md-6"><label class="form-label" for="targetAudience">Đối tượng dự kiến tham gia</label><textarea id="targetAudience" name="target_audience" class="form-control" rows="2" placeholder="Ví dụ: người nghèo, người cao tuổi, người khuyết tật, cán bộ cơ sở…"></textarea></div>
+        <div class="col-md-6"><label class="form-label" for="expectedParticipants">Quy mô dự kiến (người)</label><input id="expectedParticipants" name="expected_participants" class="form-control" type="number" min="0" max="100000" placeholder="Số lượng ước tính"></div>
+        <div class="col-12"><label class="form-label" for="topics">Nội dung pháp luật / chủ đề quan tâm</label><textarea id="topics" name="topics" class="form-control" rows="3" placeholder="Ghi mỗi chủ đề trên một dòng nếu có nhiều nội dung"></textarea></div>
+        <div class="col-12"><label class="form-label" for="questions">Câu hỏi, vướng mắc cần giải đáp</label><textarea id="questions" name="questions" class="form-control" rows="3" placeholder="Mô tả vướng mắc chung; không ghi thông tin nhận dạng cá nhân hoặc hồ sơ vụ việc"></textarea></div>
+        <div class="col-12" id="afterEventFields" hidden><hr><h2 class="h5">Đánh giá sau hội nghị</h2><div class="row g-3">
+          <div class="col-md-6"><label class="form-label" for="qualityRating">Chất lượng tổ chức hội nghị (1–5)</label><select id="qualityRating" name="quality_rating" class="form-select"><option value="">Chưa đánh giá</option><option value="1">1 · Chưa đạt</option><option value="2">2 · Cần cải thiện</option><option value="3">3 · Đạt</option><option value="4">4 · Tốt</option><option value="5">5 · Rất tốt</option></select></div>
+          <div class="col-md-6"><label class="form-label" for="coordinationRating">Công tác phối hợp giữa các cơ quan (1–5)</label><select id="coordinationRating" name="coordination_rating" class="form-select"><option value="">Chưa đánh giá</option><option value="1">1 · Chưa đạt</option><option value="2">2 · Cần cải thiện</option><option value="3">3 · Đạt</option><option value="4">4 · Tốt</option><option value="5">5 · Rất tốt</option></select></div>
+          <div class="col-12"><label class="form-label" for="coordinationAgencies">Cơ quan phối hợp và đề xuất cải thiện</label><textarea id="coordinationAgencies" name="coordination_agencies" class="form-control" rows="2"></textarea></div>
+        </div></div>
+        <div class="col-12"><label class="form-label" for="comments">Ý kiến khác</label><textarea id="comments" name="comments" class="form-control" rows="2"></textarea></div>
+      </div>
+    </div><div class="card-footer bg-white d-flex flex-wrap justify-content-between align-items-center gap-2"><small class="text-muted">Phiếu chỉ gắn với đơn vị của tài khoản đang đăng nhập. Admin xem được số liệu tổng hợp.</small><button id="submitSurvey" class="btn btn-primary" type="submit"><i class="bi bi-send me-1"></i>Gửi phiếu khảo sát</button></div></form>
+    <section class="mt-4"><h2 class="h5">Phiếu đã gửi</h2><div id="mySurveyList" class="list-group"><div class="list-group-item text-muted">Đang tải…</div></div></section>
+  </main>
+  <script src="assets/js/config.js?v=20261004-tunnel-2"></script><script src="assets/js/api.js?v=20261009-survey-1"></script><script src="assets/js/auth.js?v=20261009-ai-review-1"></script><script src="assets/js/survey.js?v=20261009-survey-1"></script>
+</body>
+</html>

@@ -57,9 +57,10 @@
         loading.textContent = "Đang cập nhật yêu cầu...";
         list.appendChild(loading);
         try {
-            const [conferenceResult, requestResult] = await Promise.all([
+            const [conferenceResult, requestResult, aiFeedbackResult] = await Promise.all([
                 getConferences(),
-                getStaffChangeRequests()
+                getStaffChangeRequests(),
+                getAiAnswerFeedback()
             ]);
             const allConferences = conferenceResult.data || [];
             const readResponses = readResponseIds();
@@ -68,6 +69,7 @@
                 .map(item => ({ ...item, responseId: `${item.id}:${item.reschedule_responded_at}` }))
                 .filter(item => !readResponses.has(item.responseId));
             const changeRequests = (requestResult.data || []).filter(item => item.status === "PENDING");
+            const wrongAiAnswers = (aiFeedbackResult.data || []).filter(item => item.vote === "INCORRECT" && item.status !== "RESOLVED");
             const notifications = [
                 ...conferences.map(item => ({
                     kind: item.status === "RESCHEDULED" ? (item.reschedule_response === "DECLINED" ? "reschedule-declined" : "reschedule") : "conference",
@@ -78,10 +80,10 @@
                 ...changeRequests.map(item => ({ kind: "staff", data: item, date: item.created_at }))
             ].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
 
-            badge.textContent = String(notifications.length);
-            badge.hidden = notifications.length === 0;
+            badge.textContent = String(notifications.length + wrongAiAnswers.length);
+            badge.hidden = notifications.length + wrongAiAnswers.length === 0;
             list.replaceChildren();
-            if (!notifications.length) {
+            if (!notifications.length && !wrongAiAnswers.length) {
                 const empty = document.createElement("div");
                 empty.className = "list-group-item text-muted";
                 empty.textContent = "Không có yêu cầu đang chờ xử lý.";
@@ -110,6 +112,44 @@
                     addNotification(list, title, detail, `conference-list.html?id=${encodeURIComponent(data.id)}`, item.date, responseId);
                 }
             });
+            if (wrongAiAnswers.length) {
+                const heading = document.createElement("div");
+                heading.className = "list-group-item fw-semibold text-danger";
+                heading.textContent = `Chatbot có ${wrongAiAnswers.length} câu trả lời bị đánh dấu sai`;
+                list.appendChild(heading);
+                wrongAiAnswers.forEach(item => {
+                    const row = document.createElement("div");
+                    row.className = "list-group-item";
+                    const question = document.createElement("div"); question.className = "fw-semibold"; question.textContent = item.question;
+                    const answer = document.createElement("div"); answer.className = "small text-muted mt-1"; answer.textContent = item.answer;
+                    const meta = document.createElement("div"); meta.className = "small text-secondary mt-1"; meta.textContent = `${item.username || "Tài khoản"} · ${item.user_role} · ${dateTime(item.created_at)}`;
+                    const correction = document.createElement("textarea"); correction.className = "form-control form-control-sm mt-2"; correction.rows = 2; correction.placeholder = "Nội dung đã kiểm chứng để thay thế/đính chính câu trả lời"; correction.value = item.correction_text || "";
+                    const citedSource = (item.sources || []).find(source => source.source_url && source.source_title);
+                    const sourceTitle = document.createElement("input"); sourceTitle.className = "form-control form-control-sm mt-2"; sourceTitle.placeholder = "Tên văn bản hoặc trang cơ quan nhà nước"; sourceTitle.value = item.correction_source_title || citedSource?.source_title || "";
+                    const sourceUrl = document.createElement("input"); sourceUrl.className = "form-control form-control-sm mt-2"; sourceUrl.type = "url"; sourceUrl.placeholder = "Liên kết https://...gov.vn / chinhphu.vn / quochoi.vn"; sourceUrl.value = item.correction_source_url || citedSource?.source_url || "";
+                    const actions = document.createElement("div"); actions.className = "d-flex gap-2 mt-2";
+                    const resolve = document.createElement("button"); resolve.type = "button"; resolve.className = "btn btn-sm btn-primary"; resolve.textContent = "Lưu đính chính";
+                    const reviewed = document.createElement("button"); reviewed.type = "button"; reviewed.className = "btn btn-sm btn-outline-secondary"; reviewed.textContent = "Đánh dấu đã xem";
+                    resolve.addEventListener("click", async () => {
+                        const officialDomains = ["gov.vn", "chinhphu.vn", "quochoi.vn"];
+                        let host = ""; try { const parsed = new URL(sourceUrl.value.trim()); if (parsed.protocol === "https:") host = parsed.hostname.toLowerCase(); } catch {}
+                        if (!correction.value.trim() || !sourceTitle.value.trim() || !officialDomains.some(domain => host === domain || host.endsWith(`.${domain}`))) {
+                            window.alert("Nhập nội dung đính chính, tên nguồn và liên kết HTTPS thuộc .gov.vn, chinhphu.vn hoặc quochoi.vn."); return;
+                        }
+                        resolve.disabled = true;
+                        try { await updateAiAnswerFeedback(item.id, { status: "RESOLVED", correction_text: correction.value, correction_source_title: sourceTitle.value, correction_source_url: sourceUrl.value }); await refreshNotifications(); }
+                        catch (error) { resolve.disabled = false; resolve.title = error.message; window.alert(error.message); }
+                    });
+                    reviewed.addEventListener("click", async () => {
+                        reviewed.disabled = true;
+                        try { await updateAiAnswerFeedback(item.id, { status: "REVIEWED" }); await refreshNotifications(); }
+                        catch (error) { reviewed.disabled = false; reviewed.title = error.message; }
+                    });
+                    actions.append(resolve, reviewed);
+                    row.append(question, answer, meta, correction, sourceTitle, sourceUrl, actions);
+                    list.appendChild(row);
+                });
+            }
         } catch (error) {
             badge.hidden = true;
             list.replaceChildren();

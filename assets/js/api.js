@@ -28,12 +28,108 @@ async function apiRequest(endpoint, options = {}) {
                 const target = `${window.location.pathname}${window.location.search}`;
                 window.location.replace(`login.html?return=${encodeURIComponent(target)}`);
             }
-            throw new Error(data?.message || `API trả về lỗi HTTP ${response.status}`);
+            throw new Error(data?.message || data?.error || `API trả về lỗi HTTP ${response.status}`);
         }
         return data;
     }
 
     return localRequest(endpoint, options);
+}
+
+async function chatWithTgpl(question, mode = "auto") {
+    return apiRequest("/ai/tgpl-chat", {
+        method: "POST",
+        body: JSON.stringify({ question, mode })
+    });
+}
+
+async function streamTgplChat(question, { mode = "auto", history = [], onMeta, onToken, onDone, signal } = {}) {
+    if (!API_BASE_URL) throw new Error("Chatbot cần kết nối backend của hệ thống.");
+    const response = await fetch(API_BASE_URL + "/ai/tgpl-chat/stream", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            ...(localStorage.getItem("tgpl.accessToken")
+                ? { Authorization: "Bearer " + localStorage.getItem("tgpl.accessToken") }
+                : {})
+        },
+        body: JSON.stringify({ question, mode, history }),
+        signal
+    });
+    if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        if (response.status === 401) {
+            localStorage.removeItem("tgpl.accessToken");
+            localStorage.removeItem("tgpl.user");
+            const target = `${window.location.pathname}${window.location.search}`;
+            window.location.replace(`login.html?return=${encodeURIComponent(target)}`);
+        }
+        throw new Error(data?.message || data?.error || ("API trả về lỗi HTTP " + response.status));
+    }
+    if (!response.body) throw new Error("Trình duyệt không hỗ trợ nhận câu trả lời dạng luồng.");
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let result = { mode, sources: [] };
+    function consumeLine(line) {
+        if (!line.trim()) return;
+        const item = JSON.parse(line);
+        if (item.type === "meta") {
+            result = { ...result, ...item };
+            if (onMeta) onMeta(item);
+        } else if (item.type === "token") {
+            if (onToken) onToken(item.text || "");
+        } else if (item.type === "done") {
+            result = { ...result, ...item };
+            if (onDone) onDone(item);
+        } else if (item.type === "error") {
+            throw new Error(item.error || "Không thể xử lý câu hỏi.");
+        }
+    }
+    try {
+        while (true) {
+            const { value, done } = await reader.read();
+            buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+            const lines = buffer.split(/\r?\n/);
+            buffer = lines.pop() || "";
+            lines.forEach(consumeLine);
+            if (done) break;
+        }
+        if (buffer.trim()) consumeLine(buffer);
+    } finally {
+        reader.releaseLock();
+    }
+    return result;
+}
+
+async function submitAiAnswerFeedback(feedback) {
+    return apiRequest("/ai/tgpl-chat/feedback", { method: "POST", body: JSON.stringify(feedback) });
+}
+async function getAiAnswerFeedback() { return apiRequest("/ai/feedback"); }
+async function updateAiAnswerFeedback(id, update) {
+    return apiRequest(`/ai/feedback/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(update) });
+}
+async function submitNeedSurvey(survey) {
+    return apiRequest("/surveys", { method: "POST", body: JSON.stringify(survey) });
+}
+async function getMyNeedSurveys() { return apiRequest("/surveys/mine"); }
+async function getNeedSurveyReport() { return apiRequest("/surveys"); }
+async function getParticipationConferences() { return apiRequest("/participation-conferences"); }
+async function registerForConference(registration) {
+    return apiRequest("/attendance-registrations", { method: "POST", body: JSON.stringify(registration) });
+}
+async function getConferenceAttendanceRegistrations(id) {
+    return apiRequest(`/conferences/${encodeURIComponent(id)}/attendance-registrations`);
+}
+async function getPublicConferenceAttendees(id) {
+    return apiRequest(`/conferences/${encodeURIComponent(id)}/public-attendance`);
+}
+async function createManualConferenceAttendee(id, attendee) {
+    return apiRequest(`/conferences/${encodeURIComponent(id)}/public-attendance/manual`, { method: "POST", body: JSON.stringify(attendee) });
+}
+async function updatePublicAttendanceCheckIn(id, attended) {
+    return apiRequest(`/public-attendance/${encodeURIComponent(id)}/check-in`, { method: "PATCH", body: JSON.stringify({ attended }) });
 }
 
 function readStored(key) {
@@ -179,6 +275,13 @@ async function updateConferenceStatus(id, status, reason = "", scheduleProposal 
     });
 }
 
+async function updateConferencePublicVisibility(id, isPublic) {
+    return apiRequest(`/conferences/${encodeURIComponent(id)}/public`, {
+        method: "PATCH",
+        body: JSON.stringify({ is_public: Boolean(isPublic) })
+    });
+}
+
 async function getConferenceStatusHistory(id) {
     return apiRequest(`/conferences/${encodeURIComponent(id)}/status-history`);
 }
@@ -253,6 +356,7 @@ async function getApprovedDateConflicts(id, startTime, endTime) {
 }
 async function getMyAssignments() { return apiRequest("/my-assignments"); }
 async function getMyReminders() { return apiRequest("/my-reminders"); }
+async function suggestConferenceTopics(description) { return apiRequest("/ai/conference-topic-advisor", { method: "POST", body: JSON.stringify({ description }) }); }
 async function getMyStaffChangeRequests() { return apiRequest("/my-assignments/change-requests"); }
 async function createStaffChangeRequest(request) {
     return apiRequest("/my-assignments/change-requests", { method: "POST", body: JSON.stringify(request) });
