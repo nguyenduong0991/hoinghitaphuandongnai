@@ -36,8 +36,8 @@
         </section>
     </main>
     <script src="assets/js/config.js?v=20261011-quick-tunnel-test-1"></script>
-    <script src="assets/js/api.js?v=20261009-survey-1"></script>
-    <script src="assets/js/auth.js?v=20261009-ai-review-1"></script>
+    <script src="assets/js/api.js?v=20261011-change-password-1"></script>
+    <script src="assets/js/auth.js?v=20261011-change-password-1"></script>
     <script>
         const form = document.getElementById("userForm");
         const rows = document.getElementById("userRows");
@@ -90,7 +90,26 @@
                         try { await updateUser(user.id, { role: role.value, is_active: active.checked, organization_id: role.value === "COMMUNE" ? (organization.value || null) : null }); showMessage(`Đã cập nhật ${user.username}.`); await loadUsers(); }
                         catch (error) { showMessage(error.message || "Không cập nhật được tài khoản.", "danger"); save.disabled = false; }
                     });
-                    actionCell.appendChild(save);
+                    const resetPassword = document.createElement("button"); resetPassword.type = "button"; resetPassword.className = "btn btn-sm btn-outline-danger ms-2"; resetPassword.textContent = "Cấp lại mật khẩu";
+                    let currentUser = null;
+                    try { currentUser = JSON.parse(localStorage.getItem("tgpl.user") || "null"); } catch {}
+                    if (String(currentUser?.id || "") === String(user.id)) {
+                        resetPassword.disabled = true;
+                        resetPassword.title = "Dùng nút Đổi mật khẩu cho tài khoản admin đang đăng nhập.";
+                    }
+                    resetPassword.addEventListener("click", async () => {
+                        if (!window.confirm(`Cấp mật khẩu tạm mới cho tài khoản ${user.username}? Mật khẩu hiện tại của tài khoản sẽ không còn dùng được.`)) return;
+                        resetPassword.disabled = true;
+                        try {
+                            const result = await resetUserPassword(user.id);
+                            const temporaryPassword = result.data?.temporary_password || "";
+                            showMessage(`Đã cấp mật khẩu tạm cho ${result.data?.full_name || user.username} (${result.data?.username || user.username}): ${temporaryPassword}. Hãy ghi lại và chuyển riêng cho người dùng.`, "warning");
+                        } catch (error) {
+                            showMessage(error.message || "Không cấp lại được mật khẩu.", "danger");
+                            resetPassword.disabled = false;
+                        }
+                    });
+                    actionCell.append(save, resetPassword);
                     rows.appendChild(row);
                 });
                 if (!rows.children.length) {

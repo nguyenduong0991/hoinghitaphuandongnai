@@ -17,7 +17,7 @@
         if (!holder || document.getElementById("accountControls")) return;
         const controls = document.createElement(sidebar ? "div" : "span");
         controls.id = "accountControls";
-        controls.className = sidebar ? "px-3 py-2 mt-3 border-top" : "ms-auto d-flex align-items-center gap-2";
+        controls.className = sidebar ? "px-3 py-2 mt-3 border-top" : "ms-auto d-flex flex-wrap align-items-center gap-2";
         const name = document.createElement("span");
         name.className = sidebar ? "d-block small text-muted mb-2" : "small text-white";
         const roleLabels = { ADMIN: "Quản trị viên", COMMUNE: "Xã/phường", TASK_ASSIGNEE: "Người nhận nhiệm vụ", SPEAKER: "Báo cáo viên" };
@@ -74,6 +74,12 @@
             attendanceLink.innerHTML = '<i class="bi bi-person-check me-1" aria-hidden="true"></i>Đăng ký tham gia hội nghị';
             controls.appendChild(attendanceLink);
         }
+        const changePassword = document.createElement("button");
+        changePassword.type = "button";
+        changePassword.className = sidebar ? "btn btn-sm btn-outline-primary me-1" : "btn btn-sm btn-outline-light";
+        changePassword.textContent = "Đổi mật khẩu";
+        changePassword.addEventListener("click", () => openPasswordDialog());
+        controls.appendChild(changePassword);
         const logout = document.createElement("button");
         logout.type = "button";
         logout.className = sidebar ? "btn btn-sm btn-outline-secondary" : "btn btn-sm btn-light";
@@ -94,6 +100,60 @@
             controls.appendChild(logout);
         }
         holder.appendChild(controls);
+    }
+
+    function openPasswordDialog() {
+        let dialog = document.getElementById("changePasswordDialog");
+        if (!dialog) {
+            dialog = document.createElement("dialog");
+            dialog.id = "changePasswordDialog";
+            dialog.className = "p-0 border-0 rounded-3 shadow";
+            dialog.style.width = "min(460px, calc(100vw - 32px))";
+            dialog.innerHTML = `
+                <form id="changePasswordForm" class="p-4">
+                    <h2 class="h5 mb-3">Đổi mật khẩu</h2>
+                    <div class="mb-3"><label class="form-label" for="currentPassword">Mật khẩu hiện tại</label><input class="form-control" id="currentPassword" type="password" autocomplete="current-password" required></div>
+                    <div class="mb-3"><label class="form-label" for="newPassword">Mật khẩu mới</label><input class="form-control" id="newPassword" type="password" minlength="12" autocomplete="new-password" required><div class="form-text">Ít nhất 12 ký tự.</div></div>
+                    <div class="mb-3"><label class="form-label" for="confirmPassword">Nhập lại mật khẩu mới</label><input class="form-control" id="confirmPassword" type="password" minlength="12" autocomplete="new-password" required></div>
+                    <div id="changePasswordMessage" class="small mb-3" role="status" aria-live="polite"></div>
+                    <div class="d-flex justify-content-end gap-2"><button type="button" class="btn btn-outline-secondary" id="cancelPasswordChange">Hủy</button><button type="submit" class="btn btn-primary" id="savePasswordChange">Lưu mật khẩu</button></div>
+                </form>`;
+            document.body.appendChild(dialog);
+            dialog.querySelector("#cancelPasswordChange").addEventListener("click", () => dialog.close());
+            dialog.querySelector("#changePasswordForm").addEventListener("submit", async event => {
+                event.preventDefault();
+                const form = event.currentTarget;
+                const message = dialog.querySelector("#changePasswordMessage");
+                const save = dialog.querySelector("#savePasswordChange");
+                const current = dialog.querySelector("#currentPassword").value;
+                const next = dialog.querySelector("#newPassword").value;
+                const confirm = dialog.querySelector("#confirmPassword").value;
+                if (next !== confirm) {
+                    message.className = "small mb-3 text-danger";
+                    message.textContent = "Mật khẩu xác nhận không khớp.";
+                    return;
+                }
+                save.disabled = true;
+                message.className = "small mb-3 text-muted";
+                message.textContent = "Đang cập nhật…";
+                try {
+                    await changeOwnPassword(current, next, confirm);
+                    message.className = "small mb-3 text-success";
+                    message.textContent = "Đã đổi mật khẩu thành công.";
+                    form.reset();
+                    window.setTimeout(() => dialog.close(), 900);
+                } catch (error) {
+                    message.className = "small mb-3 text-danger";
+                    message.textContent = error.message || "Không thể đổi mật khẩu lúc này.";
+                } finally {
+                    save.disabled = false;
+                }
+            });
+        }
+        dialog.querySelector("#changePasswordMessage").textContent = "";
+        dialog.querySelector("#changePasswordForm").reset();
+        if (!dialog.open) dialog.showModal();
+        dialog.querySelector("#currentPassword").focus();
     }
 
     async function loadDeadlineReminders(user) {

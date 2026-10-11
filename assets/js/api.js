@@ -298,11 +298,20 @@ async function setupAdminUser(username, full_name, password, bootstrapToken = ""
     });
 }
 async function getCurrentUser() { return apiRequest("/auth/me"); }
+async function changeOwnPassword(current_password, new_password, confirm_password) {
+    return apiRequest("/account/change-password", {
+        method: "POST",
+        body: JSON.stringify({ current_password, new_password, confirm_password })
+    });
+}
 async function getUsers() { return apiRequest("/users"); }
 async function getDirectory() { return apiRequest("/directory"); }
 async function createUser(user) { return apiRequest("/users", { method: "POST", body: JSON.stringify(user) }); }
 async function updateUser(id, user) {
     return apiRequest(`/users/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(user) });
+}
+async function resetUserPassword(id) {
+    return apiRequest(`/users/${encodeURIComponent(id)}/reset-password`, { method: "POST", body: "{}" });
 }
 async function getDemandAnalysis(filters = {}) {
     const query = new URLSearchParams(filters).toString();
