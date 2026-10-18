@@ -70,20 +70,36 @@
         correct.type = "button"; correct.className = "btn btn-sm btn-outline-success me-1"; correct.textContent = "Đúng";
         const incorrect = document.createElement("button");
         incorrect.type = "button"; incorrect.className = "btn btn-sm btn-outline-danger"; incorrect.textContent = "Sai";
+        const reason = document.createElement("select");
+        reason.className = "form-select form-select-sm d-inline-block ms-2";
+        reason.style.maxWidth = "190px";
+        reason.hidden = true;
+        reason.setAttribute("aria-label", "Lý do câu trả lời chưa chính xác");
+        [["", "Chọn lý do"], ["WRONG_DATA", "Sai dữ liệu"], ["WRONG_SCOPE", "Sai phạm vi"], ["IRRELEVANT", "Lạc đề"], ["INCOMPLETE", "Thiếu ý"], ["TOO_LONG", "Quá dài"], ["MISSING_SOURCE", "Thiếu căn cứ"], ["OTHER", "Lý do khác"]].forEach(([value, labelText]) => {
+            const option = document.createElement("option"); option.value = value; option.textContent = labelText; reason.appendChild(option);
+        });
+        const submitIncorrect = document.createElement("button");
+        submitIncorrect.type = "button"; submitIncorrect.className = "btn btn-sm btn-danger ms-2"; submitIncorrect.textContent = "Gửi góp ý"; submitIncorrect.hidden = true;
         const status = document.createElement("span"); status.className = "ms-2 text-muted";
-        async function vote(value, buttons) {
+        async function vote(value, reasonCode = "UNSPECIFIED") {
             correct.disabled = incorrect.disabled = true;
+            submitIncorrect.disabled = true;
             try {
-                await submitAiAnswerFeedback({ question, answer, vote: value, sources: sources || [] });
+                await submitAiAnswerFeedback({ question, answer, vote: value, reason_code: reasonCode, sources: sources || [] });
                 status.textContent = value === "INCORRECT" ? "Đã gửi cho quản trị viên rà soát." : "Cảm ơn bạn đã phản hồi.";
             } catch (error) {
                 correct.disabled = incorrect.disabled = false;
+                submitIncorrect.disabled = false;
                 status.textContent = error.message || "Chưa gửi được phản hồi.";
             }
         }
         correct.addEventListener("click", () => vote("CORRECT"));
-        incorrect.addEventListener("click", () => vote("INCORRECT"));
-        tools.append(correct, incorrect, status);
+        incorrect.addEventListener("click", () => { incorrect.hidden = true; reason.hidden = false; submitIncorrect.hidden = false; reason.focus(); });
+        submitIncorrect.addEventListener("click", () => {
+            if (!reason.value) { reason.focus(); status.textContent = "Chọn lý do để admin biết cần rà soát điều gì."; return; }
+            vote("INCORRECT", reason.value);
+        });
+        tools.append(correct, incorrect, reason, submitIncorrect, status);
         answerBubble.after(tools);
     }
 

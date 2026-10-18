@@ -110,6 +110,13 @@ async function getAiAnswerFeedback() { return apiRequest("/ai/feedback"); }
 async function updateAiAnswerFeedback(id, update) {
     return apiRequest(`/ai/feedback/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(update) });
 }
+async function getLegalAidContactRequests() { return apiRequest("/ai/contact-requests"); }
+async function updateLegalAidContactRequest(id, update) {
+    return apiRequest(`/ai/contact-requests/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        body: JSON.stringify(update)
+    });
+}
 async function submitNeedSurvey(survey) {
     return apiRequest("/surveys", { method: "POST", body: JSON.stringify(survey) });
 }
@@ -366,6 +373,7 @@ async function getApprovedDateConflicts(id, startTime, endTime) {
 async function getMyAssignments() { return apiRequest("/my-assignments"); }
 async function getMyReminders() { return apiRequest("/my-reminders"); }
 async function suggestConferenceTopics(description) { return apiRequest("/ai/conference-topic-advisor", { method: "POST", body: JSON.stringify({ description }) }); }
+async function generateConferencePlan(id) { return apiRequest(`/ai/conferences/${encodeURIComponent(id)}/plan`, { method: "POST", body: "{}" }); }
 async function getMyStaffChangeRequests() { return apiRequest("/my-assignments/change-requests"); }
 async function createStaffChangeRequest(request) {
     return apiRequest("/my-assignments/change-requests", { method: "POST", body: JSON.stringify(request) });

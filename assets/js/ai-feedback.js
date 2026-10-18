@@ -15,7 +15,8 @@
         const body = document.createElement("div"); body.className = "card-body";
         const heading = document.createElement("div"); heading.className = "d-flex flex-wrap justify-content-between gap-2 mb-3";
         const title = document.createElement("h2"); title.className = "h5 mb-0"; title.textContent = item.question;
-        const meta = document.createElement("span"); meta.className = "small text-muted"; meta.textContent = `${item.username || "Tài khoản"} · ${item.user_role || ""} · ${new Date(item.created_at).toLocaleString("vi-VN")}`;
+        const reasons = { WRONG_DATA: "Sai dữ liệu", WRONG_SCOPE: "Sai phạm vi", IRRELEVANT: "Lạc đề", INCOMPLETE: "Thiếu ý", TOO_LONG: "Quá dài", MISSING_SOURCE: "Thiếu căn cứ", OTHER: "Lý do khác", UNSPECIFIED: "Chưa nêu lý do" };
+        const meta = document.createElement("span"); meta.className = "small text-muted"; meta.textContent = `${item.username || "Tài khoản"} · ${item.user_role || ""} · ${reasons[item.reason_code] || "Chưa nêu lý do"} · ${new Date(item.created_at).toLocaleString("vi-VN")}`;
         heading.append(title, meta);
         const oldAnswer = document.createElement("div"); oldAnswer.className = "rounded bg-light p-3 mb-3";
         const oldLabel = document.createElement("div"); oldLabel.className = "small fw-semibold text-danger mb-1"; oldLabel.textContent = "Câu trả lời bị đánh dấu sai";

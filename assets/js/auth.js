@@ -257,7 +257,7 @@
             if (!document.getElementById("tgplAssistantScript")) {
                 const assistantScript = document.createElement("script");
                 assistantScript.id = "tgplAssistantScript";
-                assistantScript.src = "assets/js/topic-assistant.js?v=20261011-chat-reset-1";
+                assistantScript.src = "assets/js/topic-assistant.js?v=20261018-ai-optimization-1";
                 assistantScript.async = true;
                 document.body.appendChild(assistantScript);
             }
@@ -277,7 +277,7 @@
                     element.hidden = true;
                     element.style.display = "none";
                 });
-                if (["users.html", "organizations.html", "assignment-reports.html", "survey-results.html", "ai-feedback.html"].some(page => location.pathname.endsWith(page))) location.replace("dashboard.html");
+                if (["users.html", "organizations.html", "assignment-reports.html", "survey-results.html", "ai-feedback.html", "legal-aid-requests.html"].some(page => location.pathname.endsWith(page))) location.replace("dashboard.html");
             }
             if (location.pathname.endsWith("survey.html") && user.role !== "COMMUNE") location.replace(user.role === "ADMIN" ? "survey-results.html" : "dashboard.html");
             if (location.pathname.endsWith("survey-results.html") && user.role !== "ADMIN") location.replace("dashboard.html");

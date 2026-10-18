@@ -57,10 +57,11 @@
         loading.textContent = "Đang cập nhật yêu cầu...";
         list.appendChild(loading);
         try {
-            const [conferenceResult, requestResult, aiFeedbackResult] = await Promise.all([
+            const [conferenceResult, requestResult, aiFeedbackResult, legalAidRequestResult] = await Promise.all([
                 getConferences(),
                 getStaffChangeRequests(),
-                getAiAnswerFeedback()
+                getAiAnswerFeedback(),
+                getLegalAidContactRequests()
             ]);
             const allConferences = conferenceResult.data || [];
             const readResponses = readResponseIds();
@@ -70,6 +71,9 @@
                 .filter(item => !readResponses.has(item.responseId));
             const changeRequests = (requestResult.data || []).filter(item => item.status === "PENDING");
             const wrongAiAnswers = (aiFeedbackResult.data || []).filter(item => item.vote === "INCORRECT" && item.status !== "RESOLVED");
+            const legalAidContactRequests = legalAidRequestResult.data || [];
+            const pendingLegalAidContactRequests = legalAidContactRequests.filter(item => item.status === "PENDING");
+            const activeLegalAidContactRequests = legalAidContactRequests.filter(item => ["PENDING", "ASSIGNED"].includes(item.status));
             const notifications = [
                 ...conferences.map(item => ({
                     kind: item.status === "RESCHEDULED" ? (item.reschedule_response === "DECLINED" ? "reschedule-declined" : "reschedule") : "conference",
@@ -80,10 +84,10 @@
                 ...changeRequests.map(item => ({ kind: "staff", data: item, date: item.created_at }))
             ].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
 
-            badge.textContent = String(notifications.length + wrongAiAnswers.length);
-            badge.hidden = notifications.length + wrongAiAnswers.length === 0;
+            badge.textContent = String(notifications.length + wrongAiAnswers.length + pendingLegalAidContactRequests.length);
+            badge.hidden = notifications.length + wrongAiAnswers.length + pendingLegalAidContactRequests.length === 0;
             list.replaceChildren();
-            if (!notifications.length && !wrongAiAnswers.length) {
+            if (!notifications.length && !wrongAiAnswers.length && !activeLegalAidContactRequests.length) {
                 const empty = document.createElement("div");
                 empty.className = "list-group-item text-muted";
                 empty.textContent = "Không có yêu cầu đang chờ xử lý.";
@@ -112,6 +116,37 @@
                     addNotification(list, title, detail, `conference-list.html?id=${encodeURIComponent(data.id)}`, item.date, responseId);
                 }
             });
+            if (activeLegalAidContactRequests.length) {
+                const heading = document.createElement("div");
+                heading.className = "list-group-item fw-semibold text-primary";
+                heading.textContent = `Yêu cầu tư vấn TGPL (${pendingLegalAidContactRequests.length} mới · ${activeLegalAidContactRequests.length} đang xử lý)`;
+                list.appendChild(heading);
+                activeLegalAidContactRequests.forEach(item => {
+                    const row = document.createElement("div");
+                    row.className = "list-group-item";
+                    const title = document.createElement("div");
+                    title.className = "fw-semibold";
+                    title.textContent = item.requester_name || item.username || "Tài khoản người dùng";
+                    const detail = document.createElement("div");
+                    detail.className = "small text-muted mt-1";
+                    detail.textContent = [item.organization_name, item.email, item.phone, `Vai trò: ${item.user_role}`].filter(Boolean).join(" · ");
+                    const question = document.createElement("div");
+                    question.className = "small mt-1";
+                    question.textContent = `Nội dung: ${item.question}`;
+                    const time = document.createElement("div");
+                    time.className = "small text-secondary mt-1";
+                    time.textContent = dateTime(item.created_at);
+                    const status = document.createElement("div");
+                    status.className = "small mt-1";
+                    status.textContent = ({ PENDING: "Chưa phân công", ASSIGNED: `Đã phân công: ${item.assigned_staff_name || "chưa rõ cán bộ"}`, CONTACTED: `Đã liên hệ: ${item.assigned_staff_name || "chưa rõ cán bộ"}`, CLOSED: "Đã đóng yêu cầu" })[item.status] || item.status;
+                    const open = document.createElement("a");
+                    open.className = "btn btn-sm btn-outline-primary mt-2";
+                    open.href = `legal-aid-requests.html#${encodeURIComponent(item.id)}`;
+                    open.textContent = item.status === "PENDING" ? "Mở để phân công" : "Mở theo dõi yêu cầu";
+                    row.append(title, detail, question, time, status, open);
+                    list.appendChild(row);
+                });
+            }
             if (wrongAiAnswers.length) {
                 const heading = document.createElement("div");
                 heading.className = "list-group-item fw-semibold text-danger";
@@ -122,7 +157,8 @@
                     row.className = "list-group-item";
                     const question = document.createElement("div"); question.className = "fw-semibold"; question.textContent = item.question;
                     const answer = document.createElement("div"); answer.className = "small text-muted mt-1"; answer.textContent = item.answer;
-                    const meta = document.createElement("div"); meta.className = "small text-secondary mt-1"; meta.textContent = `${item.username || "Tài khoản"} · ${item.user_role} · ${dateTime(item.created_at)}`;
+                    const feedbackReasonLabels = { WRONG_DATA: "Sai dữ liệu", WRONG_SCOPE: "Sai phạm vi", IRRELEVANT: "Lạc đề", INCOMPLETE: "Thiếu ý", TOO_LONG: "Quá dài", MISSING_SOURCE: "Thiếu căn cứ", OTHER: "Lý do khác", UNSPECIFIED: "Chưa nêu lý do" };
+                    const meta = document.createElement("div"); meta.className = "small text-secondary mt-1"; meta.textContent = `${item.username || "Tài khoản"} · ${item.user_role} · ${feedbackReasonLabels[item.reason_code] || "Chưa nêu lý do"} · ${dateTime(item.created_at)}`;
                     const correction = document.createElement("textarea"); correction.className = "form-control form-control-sm mt-2"; correction.rows = 2; correction.placeholder = "Nội dung đã kiểm chứng để thay thế/đính chính câu trả lời"; correction.value = item.correction_text || "";
                     const citedSource = (item.sources || []).find(source => source.source_url && source.source_title);
                     const sourceTitle = document.createElement("input"); sourceTitle.className = "form-control form-control-sm mt-2"; sourceTitle.placeholder = "Tên văn bản hoặc trang cơ quan nhà nước"; sourceTitle.value = item.correction_source_title || citedSource?.source_title || "";
