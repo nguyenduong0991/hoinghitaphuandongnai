@@ -80,7 +80,20 @@ try {
     }
 
     $apiUrl = "$tunnelUrl/api"
-    $null = Invoke-RestMethod -Uri "$apiUrl/health" -TimeoutSec 15
+    $healthReady = $false
+    $healthDeadline = (Get-Date).AddSeconds(60)
+    $lastHealthError = ""
+    while ((Get-Date) -lt $healthDeadline -and -not $healthReady) {
+        if ($tunnelProcess.HasExited) { throw "Quick Tunnel da dung truoc khi API san sang." }
+        try {
+            $null = Invoke-RestMethod -Uri "$apiUrl/health" -TimeoutSec 8
+            $healthReady = $true
+        } catch {
+            $lastHealthError = $_.Exception.Message
+            Start-Sleep -Seconds 2
+        }
+    }
+    if (-not $healthReady) { throw "Quick Tunnel da mo nhung API chua truy cap duoc sau 60 giay: $lastHealthError" }
     $preflight = Invoke-WebRequest -Uri "$apiUrl/health" -Method Options -TimeoutSec 15 -UseBasicParsing -Headers @{
         Origin = $githubOrigin
         "Access-Control-Request-Method" = "GET"
