@@ -64,8 +64,10 @@ try {
         foreach ($logPath in @($stdoutPath, $stderrPath)) {
             if (Test-Path -LiteralPath $logPath) {
                 $logText = Get-Content -LiteralPath $logPath -Raw -ErrorAction SilentlyContinue
-                $match = [regex]::Match([string]$logText, 'https://[a-z0-9-]+\.trycloudflare\.com', 'IgnoreCase')
-                if ($match.Success) { $tunnelUrl = $match.Value.TrimEnd('.') }
+                if (-not [string]::IsNullOrWhiteSpace($logText)) {
+                    $match = [regex]::Match($logText, 'https://[a-z0-9-]+\.trycloudflare\.com', 'IgnoreCase')
+                    if ($match.Success) { $tunnelUrl = $match.Value.TrimEnd('.') }
+                }
             }
         }
         if (-not $tunnelUrl) { Start-Sleep -Seconds 1 }
