@@ -21,15 +21,18 @@
                 <h1 class="h3 mb-1">Yêu cầu tư vấn trợ giúp pháp lý</h1>
                 <p class="text-muted mb-0">Lưu cán bộ được giao liên hệ, ghi chú tiến độ và theo dõi từng yêu cầu đến khi hoàn tất.</p>
             </div>
-            <button id="refreshLegalAidRequests" class="btn btn-outline-primary"><i class="bi bi-arrow-clockwise me-1"></i>Làm mới</button>
+            <div class="d-flex flex-wrap gap-2">
+                <button id="exportLegalAidRequests" class="btn btn-outline-success" disabled><i class="bi bi-file-earmark-excel me-1"></i>Xuất Excel</button>
+                <button id="refreshLegalAidRequests" class="btn btn-outline-primary"><i class="bi bi-arrow-clockwise me-1"></i>Làm mới</button>
+            </div>
         </div>
         <div class="alert alert-info"><i class="bi bi-shield-check me-1"></i>Thông tin người yêu cầu chỉ hiển thị trong khu vực quản trị. Mọi thay đổi được lưu trên backend để truy vết sau khi tải lại trang.</div>
         <div id="legalAidRequestMessage" aria-live="polite"></div>
         <div id="legalAidRequestList" class="vstack gap-3"><div class="card"><div class="card-body text-muted">Đang tải yêu cầu…</div></div></div>
     </main>
     <script src="assets/js/config.js?v=20261011-quick-tunnel-test-2"></script>
-    <script src="assets/js/api.js?v=20261018-ai-optimization-1"></script>
+    <script src="assets/js/api.js?v=20261018-consultation-export-1"></script>
     <script src="assets/js/auth.js?v=20261018-ai-optimization-1"></script>
-    <script src="assets/js/legal-aid-requests.js?v=20261018-contact-requests-1"></script>
+    <script src="assets/js/legal-aid-requests.js?v=20261018-consultation-export-1"></script>
 </body>
 </html>

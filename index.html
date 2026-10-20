@@ -39,7 +39,10 @@
         <span class="brand-mark"><i class="bi bi-bank"></i></span>
         <span><strong class="d-block">Trợ giúp pháp lý</strong><small class="text-secondary">Thành phố Đồng Nai</small></span>
       </a>
-      <a href="login.html?staff=1" class="btn btn-outline-primary rounded-pill px-3 login-label"><i class="bi bi-person-lock me-1"></i>Đăng nhập cán bộ, cơ quan, đơn vị</a>
+      <div class="d-flex align-items-center gap-2">
+        <a href="#legalAidContact" class="btn btn-outline-success rounded-pill px-3 login-label"><i class="bi bi-chat-square-text me-1"></i>Gửi yêu cầu tư vấn</a>
+        <a href="login.html?staff=1" class="btn btn-outline-primary rounded-pill px-3 login-label"><i class="bi bi-person-lock me-1"></i>Đăng nhập cán bộ, cơ quan, đơn vị</a>
+      </div>
     </div>
   </nav>
 
@@ -63,6 +66,42 @@
     </div>
     <div id="publicEventStatus" class="text-secondary mb-3" role="status" aria-live="polite">Đang tải lịch hội nghị...</div>
     <div id="publicEventList" class="row g-3 g-lg-4"></div>
+
+    <section id="legalAidContact" class="card border-0 shadow-sm rounded-4 mt-5" aria-labelledby="legalAidContactTitle">
+      <div class="card-body p-4 p-lg-5">
+        <div class="row g-4 align-items-start">
+          <div class="col-lg-5">
+            <span class="eyebrow text-uppercase" style="color:var(--teal)">HỖ TRỢ NGƯỜI DÂN</span>
+            <h2 id="legalAidContactTitle" class="section-title fw-bold mt-2">Gửi yêu cầu tư vấn, trợ giúp pháp lý</h2>
+            <p class="text-secondary mb-0">Cung cấp thông tin liên hệ và nội dung cần hỗ trợ. Yêu cầu sẽ được chuyển đến quản trị viên để phân công cán bộ liên hệ với bạn.</p>
+          </div>
+          <div class="col-lg-7">
+            <form id="publicLegalAidRequestForm" class="row g-3" novalidate>
+              <div class="col-md-6">
+                <label for="publicRequesterName" class="form-label fw-semibold">Họ và tên <span class="text-danger">*</span></label>
+                <input id="publicRequesterName" name="requester_name" class="form-control" maxlength="160" autocomplete="name" required>
+              </div>
+              <div class="col-md-6">
+                <label for="publicRequesterPhone" class="form-label fw-semibold">Số điện thoại <span class="text-danger">*</span></label>
+                <input id="publicRequesterPhone" name="phone" type="tel" class="form-control" maxlength="30" autocomplete="tel" inputmode="tel" placeholder="Ví dụ: 09xx xxx xxx" required>
+              </div>
+              <div class="col-12">
+                <label for="publicRequesterQuestion" class="form-label fw-semibold">Nội dung cần tư vấn, hỗ trợ <span class="text-danger">*</span></label>
+                <textarea id="publicRequesterQuestion" name="question" class="form-control" rows="4" minlength="10" maxlength="4000" placeholder="Mô tả ngắn gọn vấn đề bạn cần được hỗ trợ" required></textarea>
+              </div>
+              <div class="visually-hidden" aria-hidden="true"><label for="publicContactWebsite">Website</label><input id="publicContactWebsite" name="website" tabindex="-1" autocomplete="off"></div>
+              <div class="col-12">
+                <p class="small text-secondary mb-2">Thông tin họ tên và số điện thoại được dùng để cán bộ liên hệ tư vấn; chỉ admin và cán bộ được phân công xem yêu cầu.</p>
+                <div class="d-flex flex-wrap align-items-center gap-3">
+                  <button id="submitPublicLegalAidRequest" type="submit" class="btn btn-primary rounded-pill px-4"><i class="bi bi-send me-2" aria-hidden="true"></i>Gửi yêu cầu</button>
+                  <span id="publicLegalAidRequestMessage" class="small" role="status" aria-live="polite"></span>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
   </main>
 
   <dialog id="registrationDialog" class="registration-dialog" aria-labelledby="registrationTitle">
@@ -77,6 +116,7 @@
         <div class="mb-3"><label for="attendeeName" class="form-label">Họ và tên <span class="text-danger">*</span></label><input id="attendeeName" name="full_name" class="form-control form-control-lg" maxlength="160" autocomplete="name" required></div>
         <div class="mb-3"><label for="attendeeAddress" class="form-label">Địa chỉ <span class="text-danger">*</span></label><input id="attendeeAddress" name="address" class="form-control form-control-lg" maxlength="500" autocomplete="street-address" required></div>
         <div class="mb-3"><label for="attendeeEmail" class="form-label">Email <span class="text-secondary fw-normal">(nếu có)</span></label><input id="attendeeEmail" name="email" type="email" class="form-control form-control-lg" maxlength="254" autocomplete="email"></div>
+        <div class="mb-3"><label for="attendeeConsultationSituation" class="form-label">Nội dung/tình huống cần tư vấn <span class="text-secondary fw-normal">(không bắt buộc điền)</span></label><textarea id="attendeeConsultationSituation" name="consultation_situation" class="form-control" rows="3" maxlength="2000" placeholder="Mô tả ngắn gọn vấn đề bạn muốn được tư vấn"></textarea><div class="form-text">Nội dung sẽ được admin dùng AI chạy trên máy chủ nội bộ để tổng hợp. Vui lòng không ghi họ tên, số điện thoại, địa chỉ hoặc thông tin nhận dạng của người liên quan. Câu trả lời do AI gợi ý chỉ được dùng sau khi admin rà soát.</div></div>
         <div id="registrationMessage" class="small mb-3" role="status" aria-live="polite"></div>
         <div class="d-flex justify-content-end gap-2"><button id="cancelRegistration" type="button" class="btn btn-light">Để sau</button><button id="submitRegistration" type="submit" class="btn btn-primary px-4">Gửi đăng ký</button></div>
       </form>
@@ -89,7 +129,7 @@
   </footer>
 
   <script src="assets/js/config.js?v=20261011-quick-tunnel-test-2"></script>
-  <script src="assets/js/public-home.js?v=20261011-public-attendance-1"></script>
+  <script src="assets/js/public-home.js?v=20261019-public-consultation-training-1"></script>
     <script src="assets/js/password-toggle.js?v=20261017-password-toggle-1"></script>
 </body>
 </html>

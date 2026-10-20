@@ -110,7 +110,33 @@ async function getAiAnswerFeedback() { return apiRequest("/ai/feedback"); }
 async function updateAiAnswerFeedback(id, update) {
     return apiRequest(`/ai/feedback/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(update) });
 }
-async function getLegalAidContactRequests() { return apiRequest("/ai/contact-requests"); }
+async function summarizePublicAttendeeConsultations() {
+    return apiRequest("/ai/public-attendee-consultations/summarize", { method: "POST", body: "{}" });
+}
+async function getPublicAttendeeAiTraining() { return apiRequest("/ai/public-attendee-consultations/training"); }
+async function reviewPublicAttendeeAiTraining(id, review) {
+    return apiRequest(`/ai/public-attendee-consultations/training/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(review) });
+}
+async function getLegalAidContactRequests({ limit, offset } = {}) {
+    const params = new URLSearchParams();
+    if (Number.isFinite(Number(limit))) params.set("limit", String(limit));
+    if (Number.isFinite(Number(offset))) params.set("offset", String(offset));
+    const query = params.toString();
+    return apiRequest(`/ai/contact-requests${query ? `?${query}` : ""}`);
+}
+async function getMyLegalAidContactRequests() { return apiRequest("/ai/my-contact-requests"); }
+async function submitLegalAidTaskFeedback(requestId, content) {
+    return apiRequest(`/ai/my-contact-requests/${encodeURIComponent(requestId)}/feedback`, {
+        method: "POST",
+        body: JSON.stringify({ content })
+    });
+}
+async function reviewLegalAidTaskFeedback(id, review) {
+    return apiRequest(`/ai/contact-feedback/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        body: JSON.stringify(review)
+    });
+}
 async function updateLegalAidContactRequest(id, update) {
     return apiRequest(`/ai/contact-requests/${encodeURIComponent(id)}`, {
         method: "PATCH",

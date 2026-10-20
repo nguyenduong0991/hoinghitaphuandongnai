@@ -28,11 +28,12 @@
         <div class="mb-4"><h2 id="welcome">Nhiệm vụ và lịch báo cáo viên</h2><p class="text-muted mb-0">Danh sách phân công dùng chung cho người nhận nhiệm vụ và báo cáo viên. Thông tin liên hệ cá nhân không hiển thị tại đây.</p></div>
         <div id="message" class="alert alert-danger" hidden></div>
         <section id="publicAttendanceSection" class="card mb-4" hidden><div class="card-header d-flex justify-content-between align-items-center"><strong>Danh sách người dân đăng ký và điểm danh</strong><span id="publicAttendanceCount" class="badge text-bg-success">0</span></div><div id="publicAttendanceList" class="card-body"><span class="text-muted">Đang tải danh sách…</span></div></section>
+        <section id="legalAidContactSection" class="card mb-4" hidden><div class="card-header d-flex justify-content-between align-items-center"><strong>Yêu cầu tư vấn được giao</strong><span id="legalAidContactCount" class="badge text-bg-info">0</span></div><div id="legalAidContactList" class="card-body"><span class="text-muted">Đang tải yêu cầu…</span></div></section>
         <section class="card mb-4"><div class="card-header d-flex justify-content-between align-items-center"><strong>Nhiệm vụ được giao</strong><span id="taskCount" class="badge text-bg-primary">0</span></div><div id="taskList" class="card-body"><span class="text-muted">Đang tải...</span></div></section>
         <section class="card"><div class="card-header d-flex justify-content-between align-items-center"><strong>Lịch báo cáo viên</strong><span id="speakerCount" class="badge text-bg-success">0</span></div><div id="speakerList" class="card-body"><span class="text-muted">Đang tải...</span></div></section>
     </main>
     <script src="assets/js/config.js?v=20261011-quick-tunnel-test-2"></script>
-    <script src="assets/js/api.js?v=20261018-ai-optimization-1"></script>
+    <script src="assets/js/api.js?v=20261018-consultation-feedback-2"></script>
     <script src="assets/js/auth.js?v=20261018-ai-optimization-1"></script>
     <script src="assets/js/attachments.js?v=20261005-attachment-management-4"></script>
     <script src="assets/js/attendance-tools.js?v=20261011-attendance-pages-1"></script>
@@ -47,7 +48,7 @@
             catch { return new Set(); }
         }
         function saveStaffNotificationIds(ids) { localStorage.setItem(staffReadKey, JSON.stringify([...ids])); }
-        function renderStaffNotifications(tasks, speakers) {
+        function renderStaffNotifications(tasks, speakers, legalAidRequests = []) {
             const list = document.getElementById("staffNotificationList");
             const badge = document.getElementById("staffNotificationBadge");
             const button = document.getElementById("staffNotificationButton");
@@ -58,7 +59,8 @@
             const assignedSessions = currentUser?.role === "SPEAKER"
                 ? speakers.filter(item => String(item.speaker_user_id) === String(currentUser.id) && item.start_time && new Date(item.start_time).getTime() >= Date.now()).map(item => ({ ...item, noticeId: `SPEAKER:${item.id}`, kind: "SPEAKER" }))
                 : [];
-            const entries = [...assignedTasks, ...assignedSessions].sort((a, b) => new Date(a.due_at || a.start_time || 0) - new Date(b.due_at || b.start_time || 0));
+            const assignedConsultations = legalAidRequests.filter(item => item.status === "ASSIGNED").map(item => ({ ...item, noticeId: `CONSULT:${item.id}`, kind: "CONSULT" }));
+            const entries = [...assignedTasks, ...assignedSessions, ...assignedConsultations].sort((a, b) => new Date(a.due_at || a.start_time || a.assigned_at || 0) - new Date(b.due_at || b.start_time || b.assigned_at || 0));
             const readIds = readStaffNotificationIds();
             const unread = entries.filter(item => !readIds.has(item.noticeId));
             badge.textContent = String(unread.length);
@@ -77,9 +79,11 @@
                 link.href = `#${item.noticeId.replace(":", "-")}`;
                 link.className = "list-group-item list-group-item-action";
                 const title = document.createElement("div"); title.className = "fw-semibold";
-                title.textContent = item.kind === "TASK" ? `Nhiệm vụ mới: ${item.title || "Chưa có tiêu đề"}` : `Lịch báo cáo mới: ${item.presentation_title || "Chưa có chuyên đề"}`;
+                title.textContent = item.kind === "TASK" ? `Nhiệm vụ mới: ${item.title || "Chưa có tiêu đề"}` : item.kind === "CONSULT" ? "Yêu cầu tư vấn TGPL mới được giao" : `Lịch báo cáo mới: ${item.presentation_title || "Chưa có chuyên đề"}`;
                 const detail = document.createElement("div"); detail.className = "small text-muted";
-                detail.textContent = `${item.conference_title || "Hội nghị"} · ${item.organization_name || ""} · ${item.kind === "TASK" ? `Hạn: ${dateTime(item.due_at)}` : `Thời gian: ${dateTime(item.start_time)}`}`;
+                detail.textContent = item.kind === "CONSULT"
+                    ? `${item.requester_name || "Người yêu cầu"} · Giao lúc: ${dateTime(item.assigned_at)}`
+                    : `${item.conference_title || "Hội nghị"} · ${item.organization_name || ""} · ${item.kind === "TASK" ? `Hạn: ${dateTime(item.due_at)}` : `Thời gian: ${dateTime(item.start_time)}`}`;
                 link.append(title, detail);
                 link.addEventListener("click", event => {
                     event.preventDefault();
@@ -450,6 +454,68 @@
                 const result = await getMyAssignments();
                 const tasks = result.data?.tasks || [];
                 const speakers = result.data?.speakers || [];
+                const contactSection = document.getElementById("legalAidContactSection");
+                const contactList = document.getElementById("legalAidContactList");
+                const contactCount = document.getElementById("legalAidContactCount");
+                const canReceiveConsultations = ["TASK_ASSIGNEE", "SPEAKER"].includes(currentUser?.role);
+                contactSection.hidden = !canReceiveConsultations;
+                let legalAidRequests = [];
+                if (canReceiveConsultations) {
+                    try {
+                        const contactResult = await getMyLegalAidContactRequests();
+                        legalAidRequests = contactResult.data || [];
+                        contactCount.textContent = String(legalAidRequests.filter(item => ["ASSIGNED", "CONTACTED"].includes(item.status)).length);
+                        contactList.replaceChildren();
+                        if (!legalAidRequests.length) line(contactList, "Chưa có yêu cầu tư vấn nào được giao cho tài khoản này.", "text-muted");
+                        legalAidRequests.forEach(item => {
+                            const card = document.createElement("article"); card.className = "border rounded p-3 mb-3"; card.id = `CONSULT-${item.id}`;
+                            line(card, item.requester_name || "Người yêu cầu tư vấn", "fw-semibold");
+                            line(card, [item.organization_name, item.user_role, `Trạng thái: ${{ ASSIGNED: "Đã phân công liên hệ", CONTACTED: "Đã liên hệ người yêu cầu", CLOSED: "Đã hoàn tất" }[item.status] || item.status}`].filter(Boolean).join(" · "), "small text-muted");
+                            line(card, `Được phân công lúc ${dateTime(item.assigned_at)}`, "small");
+                            const contacts = [item.email && `Email: ${item.email}`, item.phone && `Điện thoại: ${item.phone}`].filter(Boolean).join(" · ");
+                            if (contacts) line(card, contacts, "small mt-1");
+                            const question = document.createElement("div"); question.className = "bg-light rounded p-3 mt-2";
+                            line(question, "Nội dung cần tư vấn", "small fw-semibold");
+                            line(question, item.question || "Không có nội dung", "small mt-1"); card.appendChild(question);
+                            if (item.assignment_note) line(card, `Ghi chú của admin: ${item.assignment_note}`, "small mt-2");
+                            const feedbackSection = document.createElement("section"); feedbackSection.className = "border-top mt-3 pt-3";
+                            line(feedbackSection, "Ý kiến xử lý · nguồn cải thiện chatbot", "small fw-semibold mb-2");
+                            const reviewLabels = { PENDING: "Chờ admin duyệt", APPROVED: "Đã duyệt làm dữ liệu chatbot", REJECTED: "Không sử dụng làm dữ liệu chatbot" };
+                            (item.feedback || []).forEach(entry => {
+                                const note = document.createElement("div"); note.className = "border rounded p-2 mb-2";
+                                line(note, `${entry.author_name || "Cán bộ"} · ${dateTime(entry.created_at)} · ${reviewLabels[entry.training_status] || entry.training_status}`, "small fw-semibold");
+                                line(note, entry.content, "small mt-1");
+                                if (entry.admin_note) line(note, `Phản hồi admin: ${entry.admin_note}`, "small text-muted mt-1");
+                                feedbackSection.appendChild(note);
+                            });
+                            if (["ASSIGNED", "CONTACTED"].includes(item.status)) {
+                                const feedbackForm = document.createElement("form"); feedbackForm.className = "mt-2";
+                                const feedbackInput = document.createElement("textarea"); feedbackInput.className = "form-control form-control-sm"; feedbackInput.rows = 3; feedbackInput.minLength = 5; feedbackInput.maxLength = 4000; feedbackInput.required = true;
+                                feedbackInput.placeholder = "Ghi ý kiến nghiệp vụ, tình huống thường gặp hoặc cách hướng dẫn hữu ích… Không nhập họ tên, số điện thoại, địa chỉ hay thông tin nhận dạng người dân.";
+                                const feedbackActions = document.createElement("div"); feedbackActions.className = "d-flex align-items-center gap-2 mt-2";
+                                const sendFeedback = document.createElement("button"); sendFeedback.type = "submit"; sendFeedback.className = "btn btn-sm btn-outline-primary"; sendFeedback.textContent = "Gửi ý kiến";
+                                const feedbackStatus = document.createElement("span"); feedbackStatus.className = "small"; feedbackStatus.setAttribute("role", "status");
+                                feedbackActions.append(sendFeedback, feedbackStatus); feedbackForm.append(feedbackInput, feedbackActions);
+                                feedbackForm.addEventListener("submit", async event => {
+                                    event.preventDefault(); sendFeedback.disabled = true; feedbackStatus.className = "small text-muted"; feedbackStatus.textContent = "Đang lưu…";
+                                    try {
+                                        await submitLegalAidTaskFeedback(item.id, feedbackInput.value.trim());
+                                        feedbackStatus.className = "small text-success"; feedbackStatus.textContent = "Đã lưu và gửi admin duyệt.";
+                                        await loadAssignments();
+                                    } catch (error) {
+                                        feedbackStatus.className = "small text-danger"; feedbackStatus.textContent = error.message || "Không lưu được ý kiến."; sendFeedback.disabled = false;
+                                    }
+                                });
+                                feedbackSection.appendChild(feedbackForm);
+                            }
+                            line(feedbackSection, "Ý kiến chỉ được dùng cho chatbot sau khi admin viết lại dạng khái quát, ẩn danh và duyệt.", "small text-muted mt-2");
+                            card.appendChild(feedbackSection);
+                            contactList.appendChild(card);
+                        });
+                    } catch (error) {
+                        contactList.replaceChildren(); line(contactList, error.message || "Chưa tải được yêu cầu tư vấn được giao.", "text-danger");
+                    }
+                }
                 await renderPublicAttendance(tasks);
                 let requests = [];
                 let changeRequestServiceAvailable = true;
@@ -515,7 +581,7 @@
                     }
                     speakerList.appendChild(card);
                 }
-                renderStaffNotifications(tasks, speakers);
+                renderStaffNotifications(tasks, speakers, legalAidRequests);
             } catch (error) { message.textContent = error.message || "Không tải được danh sách phân công."; message.hidden = false; }
         }
         document.addEventListener("DOMContentLoaded", () => {

@@ -7,6 +7,9 @@
     const registrationForm = document.getElementById("publicRegistrationForm");
     const registrationMessage = document.getElementById("registrationMessage");
     const submitRegistration = document.getElementById("submitRegistration");
+    const legalAidRequestForm = document.getElementById("publicLegalAidRequestForm");
+    const legalAidRequestMessage = document.getElementById("publicLegalAidRequestMessage");
+    const submitLegalAidRequestButton = document.getElementById("submitPublicLegalAidRequest");
 
     const addText = (parent, tag, className, value) => {
         const element = document.createElement(tag);
@@ -99,7 +102,8 @@
             conference_id: conferenceId,
             full_name: document.getElementById("attendeeName").value.trim(),
             address: document.getElementById("attendeeAddress").value.trim(),
-            email: document.getElementById("attendeeEmail").value.trim()
+            email: document.getElementById("attendeeEmail").value.trim(),
+            consultation_situation: document.getElementById("attendeeConsultationSituation").value.trim()
         };
         if (!payload.full_name || !payload.address) {
             registrationMessage.textContent = "Vui lòng nhập họ tên và địa chỉ.";
@@ -127,6 +131,43 @@
         } finally { submitRegistration.disabled = false; }
     }
 
+    async function submitPublicLegalAidRequest(event) {
+        event.preventDefault();
+        const form = event.currentTarget;
+        const payload = {
+            requester_name: document.getElementById("publicRequesterName").value.trim(),
+            phone: document.getElementById("publicRequesterPhone").value.trim(),
+            question: document.getElementById("publicRequesterQuestion").value.trim(),
+            website: document.getElementById("publicContactWebsite").value.trim()
+        };
+        if (!payload.requester_name || !payload.phone || payload.question.length < 10) {
+            legalAidRequestMessage.textContent = "Vui lòng nhập họ tên, số điện thoại và nội dung cần hỗ trợ (ít nhất 10 ký tự).";
+            legalAidRequestMessage.className = "small text-danger";
+            return;
+        }
+        submitLegalAidRequestButton.disabled = true;
+        legalAidRequestMessage.textContent = "Đang gửi yêu cầu…";
+        legalAidRequestMessage.className = "small text-secondary";
+        try {
+            if (!apiBase) throw new Error("Chưa kết nối được máy chủ. Vui lòng thử lại sau.");
+            const response = await fetch(`${apiBase}/public/legal-aid-requests`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Accept: "application/json" },
+                body: JSON.stringify(payload)
+            });
+            const result = await response.json().catch(() => null);
+            if (!response.ok) throw new Error(result?.message || `Máy chủ phản hồi lỗi HTTP ${response.status}.`);
+            form.reset();
+            legalAidRequestMessage.textContent = "Đã gửi yêu cầu. Quản trị viên sẽ tiếp nhận và phân công cán bộ liên hệ với bạn.";
+            legalAidRequestMessage.className = "small text-success fw-semibold";
+        } catch (error) {
+            legalAidRequestMessage.textContent = error.message || "Chưa gửi được yêu cầu. Vui lòng thử lại.";
+            legalAidRequestMessage.className = "small text-danger";
+        } finally {
+            submitLegalAidRequestButton.disabled = false;
+        }
+    }
+
     async function loadEvents() {
         refresh.disabled = true;
         status.textContent = "Đang tải lịch hội nghị...";
@@ -144,6 +185,7 @@
     }
     refresh.addEventListener("click", loadEvents);
     registrationForm.addEventListener("submit", submitPublicRegistration);
+    legalAidRequestForm?.addEventListener("submit", submitPublicLegalAidRequest);
     ["closeRegistration", "cancelRegistration"].forEach(id => document.getElementById(id).addEventListener("click", () => dialog.close()));
     dialog.addEventListener("click", event => { if (event.target === dialog) dialog.close(); });
     loadEvents();

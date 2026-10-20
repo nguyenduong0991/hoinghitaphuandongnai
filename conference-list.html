@@ -267,7 +267,7 @@
     <!-- JAVASCRIPT -->
 
     <script src="assets/js/config.js?v=20261011-quick-tunnel-test-2"></script>
-    <script src="assets/js/api.js?v=20261018-ai-agent-plan-1"></script>
+    <script src="assets/js/api.js?v=20261019-ai-plan-slots-3"></script>
     <script src="assets/js/attendance-tools.js?v=20261011-attendance-pages-1"></script>
     <script src="assets/js/attachments.js?v=20261005-attachment-management-2"></script>
     <script src="assets/js/auth.js?v=20261018-ai-optimization-1"></script>
@@ -714,27 +714,88 @@
                 const result = await generateConferencePlan(conference.id);
                 const { plan, evidence } = result.data || {};
                 if (!plan || !evidence) throw new Error("Phản hồi lập kế hoạch chưa đầy đủ.");
+                const alternatives = Array.isArray(result.data.alternatives) && result.data.alternatives.length
+                    ? result.data.alternatives : (Array.isArray(plan.alternatives) && plan.alternatives.length ? plan.alternatives : [plan]);
+                let activePlan = alternatives[0];
                 const accountLabel = (rows, id) => {
                     const person = rows.find(item => String(item.id) === String(id));
                     return person ? `${person.full_name}${person.organization_name ? ` · ${person.organization_name}` : ""}` : "Chưa chọn tài khoản";
                 };
                 const dateOptions = evidence.available_dates || [];
-                const selectedDate = dateOptions.find(item => item.id === plan.schedule_option_id) || dateOptions[0];
+                const selectedDate = dateOptions.find(item => item.id === activePlan.schedule_option_id) || dateOptions[0];
                 container.innerHTML = `
-                    <div class="alert alert-info py-2"><strong>Bản nháp cần admin duyệt.</strong> Ngày trong danh sách đã được đối chiếu với lịch hội nghị đã phê duyệt. Số người là dự kiến, cần xác nhận với đơn vị.</div>
+                    <div class="alert alert-info py-2"><strong>Bản nháp cần admin duyệt.</strong> Mỗi phương án là một khung ngày giờ đã kiểm tra không trùng ngày với hội nghị được phê duyệt; chọn phương án để áp dụng nguyên khung giờ. Số người là dự kiến, cần xác nhận với đơn vị.</div>
+                    ${alternatives.length > 1 ? `<div class="mb-3"><label class="form-label fw-semibold" for="aiPlanAlternative">Phương án tổ chức và phân công</label><select id="aiPlanAlternative" class="form-select">${alternatives.map((item, index) => `<option value="${index}">${escapeHtml(item.label || `Phương án ${index + 1}`)}</option>`).join("")}</select><div class="form-text">Các lựa chọn phân bổ nhiệm vụ theo tải công việc và thay đổi ngày/báo cáo viên; chọn phương án để xem chi tiết.</div></div>` : ""}
                     <div class="row g-3 mb-3">
-                        <div class="col-md-6"><label class="form-label fw-semibold" for="aiPlanDateOption">Ngày đề xuất</label><select id="aiPlanDateOption" class="form-select">${dateOptions.map(item => `<option value="${escapeHtml(item.id)}" ${item.id === selectedDate?.id ? "selected" : ""}>${escapeHtml(item.label)}</option>`).join("")}</select><div class="form-text">${escapeHtml(plan.schedule_reason || "AI chọn từ các ngày hệ thống xác nhận còn trống.")}</div></div>
+                        <div class="col-md-6"><div class="form-label fw-semibold">Ngày và giờ đề xuất</div><div id="aiPlanDateOption" class="form-control bg-light" aria-live="polite">${escapeHtml(selectedDate?.label || "Chưa có khung giờ")}</div><div id="aiPlanScheduleReason" class="form-text">${escapeHtml(activePlan.schedule_reason || "Khung giờ đã được hệ thống kiểm tra.")}</div></div>
                         <div class="col-md-6"><div class="fw-semibold">Quy mô tham dự dự kiến</div><div class="fs-4">${Number(plan.expected_attendees || 0).toLocaleString("vi-VN")} người</div><div class="form-text">${escapeHtml(plan.attendee_basis || "Ước tính từ hồ sơ hội nghị và đăng ký hiện có.")}</div><div class="small text-muted">Đơn vị đăng ký: ${Number(evidence.attendance?.registered_organizations || 0)} · Số người đơn vị đăng ký: ${Number(evidence.attendance?.estimated_people_from_units || 0)} · Người dân đăng ký: ${Number(evidence.attendance?.public_residents_registered || 0)}</div></div>
                     </div>
                     <button id="useAiPlanDate" type="button" class="btn btn-outline-primary btn-sm mb-3">Đưa ngày đề xuất vào phần dời lịch</button>
                     <h6>Báo cáo viên đề xuất</h6>
-                    <div id="aiPlanSpeakers" class="vstack gap-2 mb-3">${plan.speakers?.length ? plan.speakers.map((person, index) => `<div class="border rounded p-2 d-flex flex-wrap justify-content-between align-items-center gap-2"><div><strong>${escapeHtml(accountLabel(evidence.eligible_speakers || [], person.speaker_user_id))}</strong><div>${escapeHtml(person.presentation_title || "Chuyên đề hội nghị")} · ${Number(person.duration_minutes || 30)} phút</div></div><button type="button" class="btn btn-sm btn-outline-success" data-ai-speaker="${index}">Điền biểu mẫu</button></div>`).join("") : '<p class="text-muted">Chưa có tài khoản báo cáo viên phù hợp hoặc AI chưa đề xuất được.</p>'}</div>
+                    <div id="aiPlanSpeakers" class="vstack gap-2 mb-3"></div>
+                    <section class="border rounded p-3 mb-3 bg-light" aria-labelledby="aiPlanQuestionsHeading">
+                        <h6 id="aiPlanQuestionsHeading">Câu hỏi dự phòng để báo cáo viên chuẩn bị</h6>
+                        <p class="small text-muted">AI gợi ý theo chủ đề, mô tả hội nghị và các tình huống người dân nêu khi đăng ký (đã ẩn thông tin cá nhân); admin rà soát trước khi đưa vào ghi chú phân công.</p>
+                        <ol id="aiPlanQuestions" class="mb-2"></ol>
+                        <button id="addAiPlanQuestionsToSpeaker" type="button" class="btn btn-sm btn-outline-primary">Đưa câu hỏi vào ghi chú báo cáo viên</button>
+                    </section>
                     <h6>Nhiệm vụ đề xuất</h6>
-                    <div id="aiPlanTasks" class="vstack gap-2 mb-3">${plan.tasks?.length ? plan.tasks.map((task, index) => `<div class="border rounded p-2 d-flex flex-wrap justify-content-between align-items-center gap-2"><div><strong>${escapeHtml(task.title)}</strong><div>${escapeHtml(accountLabel(evidence.eligible_task_assignees || [], task.assignee_user_id))} · Hạn ${escapeHtml(formatDateTime(task.due_at))}</div><div class="small text-muted">${escapeHtml(task.description || "")}</div></div><button type="button" class="btn btn-sm btn-outline-primary" data-ai-task="${index}">Điền biểu mẫu</button></div>`).join("") : '<p class="text-muted">Chưa có nhiệm vụ đề xuất phù hợp.</p>'}</div>
-                    ${plan.planning_notes?.length ? `<div class="alert alert-warning py-2 mb-0"><strong>Admin cần rà soát:</strong><ul class="mb-0 mt-1">${plan.planning_notes.map(note => `<li>${escapeHtml(note)}</li>`).join("")}</ul></div>` : ""}`;
+                    <div id="aiPlanTasks" class="vstack gap-2 mb-3"></div>
+                    <div id="aiPlanNotes"></div>`;
+
+                const renderActivePlan = () => {
+                    const date = dateOptions.find(item => item.id === activePlan.schedule_option_id) || dateOptions[0];
+                    document.getElementById("aiPlanDateOption").textContent = date?.label || "Chưa có khung giờ";
+                    document.getElementById("aiPlanScheduleReason").textContent = activePlan.schedule_reason || "Khung giờ đã được hệ thống kiểm tra.";
+                    document.getElementById("aiPlanSpeakers").innerHTML = activePlan.speakers?.length ? activePlan.speakers.map((person, index) => `<div class="border rounded p-2 d-flex flex-wrap justify-content-between align-items-center gap-2"><div><strong>${escapeHtml(accountLabel(evidence.eligible_speakers || [], person.speaker_user_id))}</strong><div>${escapeHtml(person.presentation_title || "Chuyên đề hội nghị")} · ${Number(person.duration_minutes || 30)} phút</div></div><button type="button" class="btn btn-sm btn-outline-success" data-ai-speaker="${index}">Điền biểu mẫu</button></div>`).join("") : '<p class="text-muted">Chưa có tài khoản báo cáo viên phù hợp hoặc AI chưa đề xuất được.</p>';
+                    const suggestedQuestions = Array.isArray(activePlan.speaker_questions) ? activePlan.speaker_questions : [];
+                    document.getElementById("aiPlanQuestions").innerHTML = suggestedQuestions.length ? suggestedQuestions.map(question => `<li>${escapeHtml(question)}</li>`).join("") : "<li>Chưa tạo được câu hỏi phù hợp; admin có thể bổ sung câu hỏi trong ghi chú báo cáo viên.</li>";
+                    const addQuestionsButton = document.getElementById("addAiPlanQuestionsToSpeaker");
+                    addQuestionsButton.disabled = !activePlan.speakers?.length || !suggestedQuestions.length;
+                    addQuestionsButton.onclick = () => {
+                        const speaker = activePlan.speakers?.[0];
+                        if (!speaker) { message.textContent = "Phương án chưa có báo cáo viên. Hãy chọn hoặc phân công báo cáo viên trước."; return; }
+                        document.getElementById("speakerName").value = speaker.speaker_user_id || "";
+                        document.getElementById("speakerOrganization").value = (evidence.eligible_speakers || []).find(item => String(item.id) === String(speaker.speaker_user_id))?.organization_name || "";
+                        document.getElementById("speakerTopic").value = speaker.presentation_title || "";
+                        document.getElementById("speakerOrder").value = speaker.speaking_order || 1;
+                        document.getElementById("speakerDuration").value = speaker.duration_minutes || 30;
+                        document.getElementById("speakerNotes").value = [speaker.notes, "Câu hỏi dự phòng để chuẩn bị:", ...suggestedQuestions.map((question, index) => `${index + 1}. ${question}`)].filter(Boolean).join("\n").slice(0, 2000);
+                        document.getElementById("speakerName").scrollIntoView({ behavior: "smooth", block: "center" });
+                        message.textContent = "Đã điền câu hỏi vào ghi chú báo cáo viên. Admin rà soát rồi bấm Thêm báo cáo viên để lưu và hiển thị cho tài khoản được phân công.";
+                    };
+                    document.getElementById("aiPlanTasks").innerHTML = activePlan.tasks?.length ? activePlan.tasks.map((task, index) => `<div class="border rounded p-2 d-flex flex-wrap justify-content-between align-items-center gap-2"><div><strong>${escapeHtml(task.title)}</strong><div>${escapeHtml(accountLabel(evidence.eligible_task_assignees || [], task.assignee_user_id))} · Hạn ${escapeHtml(formatDateTime(task.due_at))}</div><div class="small text-muted">${escapeHtml(task.description || "")}</div></div><button type="button" class="btn btn-sm btn-outline-primary" data-ai-task="${index}">Điền biểu mẫu</button></div>`).join("") : '<p class="text-muted">Chưa có nhiệm vụ đề xuất phù hợp.</p>';
+                    document.getElementById("aiPlanNotes").innerHTML = activePlan.planning_notes?.length ? `<div class="alert alert-warning py-2 mb-0"><strong>Admin cần rà soát:</strong><ul class="mb-0 mt-1">${activePlan.planning_notes.map(note => `<li>${escapeHtml(note)}</li>`).join("")}</ul></div>` : "";
+                    document.querySelectorAll("[data-ai-task]").forEach(control => control.addEventListener("click", () => {
+                        const task = activePlan.tasks[Number(control.dataset.aiTask)];
+                        document.getElementById("assignmentTitle").value = task.title || "";
+                        document.getElementById("assignmentAssignee").value = task.assignee_user_id || "";
+                        document.getElementById("assignmentOrganization").value = (evidence.eligible_task_assignees || []).find(item => String(item.id) === String(task.assignee_user_id))?.organization_name || "";
+                        document.getElementById("assignmentDescription").value = task.description || "";
+                        const due = new Date(task.due_at); document.getElementById("assignmentDueAt").value = Number.isNaN(due.getTime()) ? "" : new Date(due.getTime() - due.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+                        document.getElementById("assignmentTitle").scrollIntoView({ behavior: "smooth", block: "center" });
+                        message.textContent = "Đã điền biểu mẫu. Admin kiểm tra lại rồi bấm Giao nhiệm vụ để lưu.";
+                    }));
+                    document.querySelectorAll("[data-ai-speaker]").forEach(control => control.addEventListener("click", () => {
+                        const speaker = activePlan.speakers[Number(control.dataset.aiSpeaker)];
+                        document.getElementById("speakerName").value = speaker.speaker_user_id || "";
+                        document.getElementById("speakerOrganization").value = (evidence.eligible_speakers || []).find(item => String(item.id) === String(speaker.speaker_user_id))?.organization_name || "";
+                        document.getElementById("speakerTopic").value = speaker.presentation_title || "";
+                        document.getElementById("speakerOrder").value = speaker.speaking_order || 1;
+                        document.getElementById("speakerDuration").value = speaker.duration_minutes || 30;
+                        document.getElementById("speakerNotes").value = speaker.notes || "";
+                        document.getElementById("speakerName").scrollIntoView({ behavior: "smooth", block: "center" });
+                        message.textContent = "Đã điền biểu mẫu. Admin kiểm tra lại rồi bấm Thêm báo cáo viên để lưu.";
+                    }));
+                };
+                renderActivePlan();
+                document.getElementById("aiPlanAlternative")?.addEventListener("change", event => {
+                    activePlan = alternatives[Number(event.target.value)] || alternatives[0];
+                    renderActivePlan();
+                });
 
                 document.getElementById("useAiPlanDate").addEventListener("click", () => {
-                    const choice = dateOptions.find(item => item.id === document.getElementById("aiPlanDateOption").value);
+                    const choice = dateOptions.find(item => item.id === activePlan.schedule_option_id);
                     if (!choice) return;
                     const localValue = value => { const date = new Date(value); return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };
                     document.getElementById("proposedStartTime").value = localValue(choice.start_time);
@@ -746,27 +807,6 @@
                     document.getElementById("proposedEndTime").dispatchEvent(new Event("change", { bubbles: true }));
                     message.textContent = "Đã điền ngày vào biểu mẫu dời lịch. Kiểm tra cảnh báo trùng rồi bấm Lưu trạng thái để gửi đơn vị phản hồi.";
                 });
-                document.querySelectorAll("[data-ai-task]").forEach(control => control.addEventListener("click", () => {
-                    const task = plan.tasks[Number(control.dataset.aiTask)];
-                    document.getElementById("assignmentTitle").value = task.title || "";
-                    document.getElementById("assignmentAssignee").value = task.assignee_user_id || "";
-                    document.getElementById("assignmentOrganization").value = (evidence.eligible_task_assignees || []).find(item => String(item.id) === String(task.assignee_user_id))?.organization_name || "";
-                    document.getElementById("assignmentDescription").value = task.description || "";
-                    const due = new Date(task.due_at); document.getElementById("assignmentDueAt").value = Number.isNaN(due.getTime()) ? "" : new Date(due.getTime() - due.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-                    document.getElementById("assignmentTitle").scrollIntoView({ behavior: "smooth", block: "center" });
-                    message.textContent = "Đã điền biểu mẫu. Admin kiểm tra lại rồi bấm Giao nhiệm vụ để lưu.";
-                }));
-                document.querySelectorAll("[data-ai-speaker]").forEach(control => control.addEventListener("click", () => {
-                    const speaker = plan.speakers[Number(control.dataset.aiSpeaker)];
-                    document.getElementById("speakerName").value = speaker.speaker_user_id || "";
-                    document.getElementById("speakerOrganization").value = (evidence.eligible_speakers || []).find(item => String(item.id) === String(speaker.speaker_user_id))?.organization_name || "";
-                    document.getElementById("speakerTopic").value = speaker.presentation_title || "";
-                    document.getElementById("speakerOrder").value = speaker.speaking_order || 1;
-                    document.getElementById("speakerDuration").value = speaker.duration_minutes || 30;
-                    document.getElementById("speakerNotes").value = speaker.notes || "";
-                    document.getElementById("speakerName").scrollIntoView({ behavior: "smooth", block: "center" });
-                    message.textContent = "Đã điền biểu mẫu. Admin kiểm tra lại rồi bấm Thêm báo cáo viên để lưu.";
-                }));
                 message.textContent = result.data?.generated_by === "system-template" ? "Đã tạo phương án khung; Ollama chưa trả kế hoạch hoàn chỉnh. Admin cần rà soát kỹ." : "Đã tạo bản nháp từ dữ liệu hệ thống. Chưa có thay đổi nào được lưu.";
             } catch (error) {
                 message.textContent = error.message || "Không tạo được phương án AI.";
