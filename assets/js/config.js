@@ -6,5 +6,5 @@ const localBackendHost = ["localhost", "127.0.0.1"].includes(window.location.hos
     ? "localhost"
     : window.location.hostname;
 window.TGPL_API_BASE_URL = window.TGPL_API_BASE_URL || (isGitHubPages || isQuickTunnel
-    ? "https://luggage-expectations-remark-creations.trycloudflare.com/api"
+    ? "https://longitude-ate-gem-guarantees.trycloudflare.com/api"
     : `${window.location.protocol}//${localBackendHost}:3001/api`);
