@@ -106,6 +106,21 @@ async function streamTgplChat(question, { mode = "auto", history = [], onMeta, o
 async function submitAiAnswerFeedback(feedback) {
     return apiRequest("/ai/tgpl-chat/feedback", { method: "POST", body: JSON.stringify(feedback) });
 }
+async function createConferencePlanProposal(question) {
+    return apiRequest("/ai/conference-plan-proposal", { method: "POST", body: JSON.stringify({ question }) });
+}
+async function reviewAdminDailyIntake() {
+    return apiRequest("/ai/admin/daily-intake-review", { method: "POST", body: "{}" });
+}
+async function getConferencePlanNotifications() {
+    return apiRequest("/ai/conference-plan-notifications/mine");
+}
+async function sendConferencePlanNotification(payload) {
+    return apiRequest("/ai/conference-plan-notifications", { method: "POST", body: JSON.stringify(payload) });
+}
+async function markConferencePlanNotificationRead(id) {
+    return apiRequest(`/ai/conference-plan-notifications/${encodeURIComponent(id)}/read`, { method: "POST", body: "{}" });
+}
 async function getAiAnswerFeedback() { return apiRequest("/ai/feedback"); }
 async function updateAiAnswerFeedback(id, update) {
     return apiRequest(`/ai/feedback/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(update) });

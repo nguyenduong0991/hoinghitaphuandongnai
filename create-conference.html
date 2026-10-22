@@ -15,7 +15,7 @@
 
     <link
         rel="stylesheet"
-        href="assets/css/style.css?v=20261008-shared-chat-1">
+        href="assets/css/style.css?v=20261020-chat-layout-1">
 </head>
 
 <body>
@@ -290,9 +290,9 @@
 
     <!-- API -->
     <script src="assets/js/config.js?v=20261011-quick-tunnel-test-2"></script>
-    <script src="assets/js/api.js?v=20261018-ai-optimization-1"></script>
+    <script src="assets/js/api.js?v=20261020-chat-planner-5"></script>
     <script src="assets/js/attachments.js?v=20261003-3"></script>
-    <script src="assets/js/auth.js?v=20261018-ai-optimization-1"></script>
+    <script src="assets/js/auth.js?v=20261020-chat-layout-1"></script>
 
 
     <!-- LOGIC -->
@@ -368,8 +368,31 @@
         applyOrganizationMode();
         try { setAdminOrganizationAccess(JSON.parse(localStorage.getItem("tgpl.user") || "null")); }
         catch { setAdminOrganizationAccess(null); }
+        let pendingConferencePlanDraft = null;
+        try { pendingConferencePlanDraft = JSON.parse(sessionStorage.getItem("tgpl.ai.pending-conference-plan") || "null"); } catch {}
         if (isSharedAttachmentStorage()) {
-            loadOrganizations().catch(error => showError(error.message || "Không tải được danh sách đơn vị."));
+            loadOrganizations(pendingConferencePlanDraft?.organization_id || "").catch(error => showError(error.message || "Không tải được danh sách đơn vị."));
+        }
+        function applyConferencePlanDraft(draft) {
+            if (!draft || !document.getElementById("conferenceForm")) return;
+            const setValue = (id, value) => { const field = document.getElementById(id); if (field && value !== undefined && value !== null && value !== "") { field.value = value; field.dispatchEvent(new Event("input", { bubbles: true })); field.dispatchEvent(new Event("change", { bubbles: true })); } };
+            setValue("title", draft.title);
+            setValue("organization_name", draft.organization_name);
+            setValue("organization_id", draft.organization_id);
+            setValue("start_time", draft.start_time ? new Date(new Date(draft.start_time).getTime() - new Date(draft.start_time).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "");
+            setValue("end_time", draft.end_time ? new Date(new Date(draft.end_time).getTime() - new Date(draft.end_time).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "");
+            setValue("location", draft.location);
+            setValue("expected_participants", draft.expected_participants);
+            setValue("description", draft.description);
+        }
+        window.addEventListener("tgpl:apply-conference-plan", event => applyConferencePlanDraft(event.detail));
+        if (pendingConferencePlanDraft) {
+            (async () => {
+                if (isSharedAttachmentStorage() && organizationSelect.value !== pendingConferencePlanDraft.organization_id) await loadOrganizations(pendingConferencePlanDraft.organization_id || "");
+                applyConferencePlanDraft(pendingConferencePlanDraft);
+                sessionStorage.removeItem("tgpl.ai.pending-conference-plan");
+                showSuccess("Đã điền biểu mẫu từ phương án AI đã được bạn xác nhận. Vui lòng rà soát và tự bấm Lưu đăng ký khi sẵn sàng.");
+            })().catch(error => showError(error.message || "Chưa điền được bản nháp AI."));
         }
         window.addEventListener("tgpl:authenticated", event => setAdminOrganizationAccess(event.detail?.user));
 

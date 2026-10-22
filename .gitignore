@@ -1,3 +1,6 @@
 /data/
 node_modules/
 *.log
+.open-webui-venv/
+.open-webui-data/
+/ai-finetuning/

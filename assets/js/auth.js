@@ -257,7 +257,7 @@
             if (!document.getElementById("tgplAssistantScript")) {
                 const assistantScript = document.createElement("script");
                 assistantScript.id = "tgplAssistantScript";
-                assistantScript.src = "assets/js/topic-assistant.js?v=20261018-ai-optimization-1";
+                assistantScript.src = "assets/js/topic-assistant.js?v=20261020-chat-layout-1";
                 assistantScript.async = true;
                 document.body.appendChild(assistantScript);
             }
