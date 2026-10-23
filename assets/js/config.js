@@ -6,5 +6,5 @@ const localBackendHost = ["localhost", "127.0.0.1"].includes(window.location.hos
     ? "localhost"
     : window.location.hostname;
 window.TGPL_API_BASE_URL = window.TGPL_API_BASE_URL || (isGitHubPages || isQuickTunnel
-    ? "https://respectively-story-talk-louisville.trycloudflare.com/api"
+    ? "https://penn-gain-wave-hugh.trycloudflare.com/api"
     : `${window.location.protocol}//${localBackendHost}:3001/api`);
