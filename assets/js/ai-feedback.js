@@ -10,7 +10,7 @@
     message.replaceChildren();
     try {
       const result = await getAiAnswerFeedback();
-      const rows = (result.data || []).filter(item => item.vote === "INCORRECT" && item.status !== "RESOLVED");
+      const rows = (result.data || []).filter(item => item.vote === "INCORRECT" && !["RESOLVED", "REVIEWED"].includes(String(item.status || "").toUpperCase()));
       if (!rows.length) { list.innerHTML = '<div class="card"><div class="card-body text-muted">Không có câu trả lời nào đang chờ rà soát.</div></div>'; return; }
       list.replaceChildren();
       rows.forEach(item => {

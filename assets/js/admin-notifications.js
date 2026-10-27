@@ -5,27 +5,16 @@
     const badge = document.getElementById("adminNotificationBadge");
     const list = document.getElementById("adminNotificationList");
     if (!wrap || !button || !panel || !badge || !list) return;
-    const readKey = "tgpl.admin-reschedule-responses.read.v1";
-
-    function readResponseIds() {
-        try {
-            const value = JSON.parse(localStorage.getItem(readKey) || "[]");
-            return new Set(Array.isArray(value) ? value : []);
-        } catch { return new Set(); }
-    }
-
-    function markResponseRead(responseId) {
-        if (!responseId) return;
-        const read = readResponseIds();
-        read.add(responseId);
-        localStorage.setItem(readKey, JSON.stringify([...read].slice(-300)));
-    }
+    let activeUser = null;
+    const readNoticeIds = () => window.TGPLNotificationReadState?.read("admin", activeUser) || new Set();
+    const markNoticeRead = id => window.TGPLNotificationReadState?.mark("admin", activeUser, id);
+    const noticeId = (kind, item) => `${kind}:${item.id}:${kind === "reschedule-accepted" ? item.reschedule_responded_at : (item.updated_at || item.created_at || "current")}`;
 
     const dateTime = value => value
         ? new Date(value).toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" })
         : "";
 
-    function addNotification(container, title, detail, href, date, responseId = null) {
+    function addNotification(container, title, detail, href, date, id, readIds) {
         const link = document.createElement("a");
         link.className = "list-group-item list-group-item-action";
         link.href = href;
@@ -35,6 +24,11 @@
         const description = document.createElement("div");
         description.className = "small text-muted";
         description.textContent = detail;
+        const state = document.createElement("span");
+        const isRead = readIds.has(id);
+        state.className = `badge rounded-pill ${isRead ? "text-bg-light text-secondary" : "text-bg-primary"} ms-2`;
+        state.textContent = isRead ? "Đã xem" : "Mới";
+        heading.appendChild(state);
         link.append(heading, description);
         if (date) {
             const time = document.createElement("div");
@@ -43,7 +37,7 @@
             link.appendChild(time);
         }
         link.addEventListener("click", () => {
-            markResponseRead(responseId);
+            markNoticeRead(id);
             panel.hidden = true;
             button.setAttribute("aria-expanded", "false");
         });
@@ -64,13 +58,16 @@
                 getLegalAidContactRequests()
             ]);
             const allConferences = conferenceResult.data || [];
-            const readResponses = readResponseIds();
+            const readIds = readNoticeIds();
             const conferences = allConferences.filter(item => item.status === "PENDING" || item.status === "RESCHEDULED");
             const acceptedResponses = allConferences.filter(item => item.reschedule_response === "ACCEPTED" && item.reschedule_responded_at)
-                .map(item => ({ ...item, responseId: `${item.id}:${item.reschedule_responded_at}` }))
-                .filter(item => !readResponses.has(item.responseId));
+                .map(item => ({ ...item, responseId: `${item.id}:${item.reschedule_responded_at}` }));
+            try {
+                const legacyRead = new Set(JSON.parse(localStorage.getItem("tgpl.admin-reschedule-responses.read.v1") || "[]"));
+                acceptedResponses.filter(item => legacyRead.has(item.responseId)).forEach(item => markNoticeRead(noticeId("reschedule-accepted", item)));
+            } catch { /* Ignore malformed legacy notification state. */ }
             const changeRequests = (requestResult.data || []).filter(item => item.status === "PENDING");
-            const wrongAiAnswers = (aiFeedbackResult.data || []).filter(item => item.vote === "INCORRECT" && item.status !== "RESOLVED");
+            const wrongAiAnswers = (aiFeedbackResult.data || []).filter(item => item.vote === "INCORRECT" && !["RESOLVED", "REVIEWED"].includes(String(item.status || "").toUpperCase()));
             const legalAidContactRequests = legalAidRequestResult.data || [];
             const pendingLegalAidContactRequests = legalAidContactRequests.filter(item => item.status === "PENDING");
             const activeLegalAidContactRequests = legalAidContactRequests.filter(item => ["PENDING", "ASSIGNED"].includes(item.status));
@@ -84,8 +81,13 @@
                 ...changeRequests.map(item => ({ kind: "staff", data: item, date: item.created_at }))
             ].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
 
-            badge.textContent = String(notifications.length + wrongAiAnswers.length + pendingLegalAidContactRequests.length);
-            badge.hidden = notifications.length + wrongAiAnswers.length + pendingLegalAidContactRequests.length === 0;
+            const unreadCount = [
+                ...notifications.map(item => noticeId(item.kind, item.data)),
+                ...wrongAiAnswers.map(item => noticeId("ai-feedback", item)),
+                ...activeLegalAidContactRequests.map(item => noticeId("legal-aid", item))
+            ].filter(id => !readIds.has(id)).length;
+            badge.textContent = String(unreadCount);
+            badge.hidden = unreadCount === 0;
             list.replaceChildren();
             if (!notifications.length && !wrongAiAnswers.length && !activeLegalAidContactRequests.length) {
                 const empty = document.createElement("div");
@@ -98,11 +100,10 @@
                 const data = item.data;
                 if (item.kind === "staff") {
                     const category = data.request_type === "TASK" ? "người nhận nhiệm vụ" : "báo cáo viên";
-                    addNotification(list, "Đề nghị đổi cán bộ", `${data.requester_name} (${category}) · ${data.conference_title || "Hội nghị"} · ${data.assignment_title || "Phân công"}`, "assignment-reports.html#staff-change-requests", item.date);
+                    addNotification(list, "Đề nghị đổi cán bộ", `${data.requester_name} (${category}) · ${data.conference_title || "Hội nghị"} · ${data.assignment_title || "Phân công"}`, "assignment-reports.html#staff-change-requests", item.date, noticeId(item.kind, data), readIds);
                 } else {
                     let title = "Yêu cầu tổ chức hội nghị mới";
                     let detail = `${data.organization_name || "Đơn vị chưa rõ"} · ${data.title || "Chưa có chủ đề"}`;
-                    let responseId = null;
                     if (item.kind === "reschedule") title = "Đơn vị cần phản hồi đề xuất dời lịch";
                     if (item.kind === "reschedule-declined") {
                         title = "Đơn vị từ chối lịch dời — cần đề xuất lại";
@@ -111,15 +112,14 @@
                     if (item.kind === "reschedule-accepted") {
                         title = "Đơn vị đã chấp thuận dời lịch";
                         detail += ` · Lịch mới: ${dateTime(data.start_time)}${data.location_name ? ` · ${data.location_name}` : ""}`;
-                        responseId = data.responseId;
                     }
-                    addNotification(list, title, detail, `conference-list.html?id=${encodeURIComponent(data.id)}`, item.date, responseId);
+                    addNotification(list, title, detail, `conference-list.html?id=${encodeURIComponent(data.id)}`, item.date, noticeId(item.kind, data), readIds);
                 }
             });
             if (activeLegalAidContactRequests.length) {
                 const heading = document.createElement("div");
                 heading.className = "list-group-item fw-semibold text-primary";
-                heading.textContent = `Yêu cầu tư vấn TGPL (${pendingLegalAidContactRequests.length} mới · ${activeLegalAidContactRequests.length} đang xử lý)`;
+                heading.textContent = `Yêu cầu tư vấn TGPL (${pendingLegalAidContactRequests.length} chưa phân công · ${activeLegalAidContactRequests.length} đang xử lý)`;
                 list.appendChild(heading);
                 activeLegalAidContactRequests.forEach(item => {
                     const row = document.createElement("div");
@@ -143,6 +143,12 @@
                     open.className = "btn btn-sm btn-outline-primary mt-2";
                     open.href = `legal-aid-requests.html#${encodeURIComponent(item.id)}`;
                     open.textContent = item.status === "PENDING" ? "Mở để phân công" : "Mở theo dõi yêu cầu";
+                    const id = noticeId("legal-aid", item);
+                    const seen = document.createElement("span");
+                    seen.className = `badge rounded-pill ${readIds.has(id) ? "text-bg-light text-secondary" : "text-bg-primary"} ms-2`;
+                    seen.textContent = readIds.has(id) ? "Đã xem" : "Mới";
+                    title.appendChild(seen);
+                    row.addEventListener("click", () => { markNoticeRead(id); refreshNotifications(); });
                     row.append(title, detail, question, time, status, open);
                     list.appendChild(row);
                 });
@@ -178,7 +184,7 @@
                     });
                     reviewed.addEventListener("click", async () => {
                         reviewed.disabled = true;
-                        try { await updateAiAnswerFeedback(item.id, { status: "REVIEWED" }); await refreshNotifications(); }
+                        try { await updateAiAnswerFeedback(item.id, { status: "REVIEWED" }); markNoticeRead(noticeId("ai-feedback", item)); await refreshNotifications(); }
                         catch (error) { reviewed.disabled = false; reviewed.title = error.message; }
                     });
                     actions.append(resolve, reviewed);
@@ -198,6 +204,7 @@
 
     function enableForUser(user) {
         const isAdmin = user?.role === "ADMIN";
+        activeUser = user || null;
         wrap.hidden = !isAdmin;
         wrap.style.display = isAdmin ? "" : "none";
         if (isAdmin) refreshNotifications();
@@ -216,6 +223,10 @@
         }
     });
     window.addEventListener("tgpl:authenticated", event => enableForUser(event.detail?.user));
+    try { enableForUser(window.tgplCurrentUser || JSON.parse(localStorage.getItem("tgpl.user") || "null")); } catch { enableForUser(null); }
+    window.addEventListener("storage", event => {
+        if (event.key?.startsWith("tgpl.notification-read.admin.")) refreshNotifications();
+    });
     window.setInterval(() => {
         if (!wrap.hidden && window.tgplCurrentUser?.role === "ADMIN") refreshNotifications();
     }, 60 * 1000);

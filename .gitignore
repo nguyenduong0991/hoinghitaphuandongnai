@@ -4,3 +4,5 @@ node_modules/
 .open-webui-venv/
 .open-webui-data/
 /ai-finetuning/
+.codex-backups/
+*.bak

@@ -5,14 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Phân công · Hội nghị TGPL</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="assets/css/style.css?v=20261020-chat-layout-1">
+    <link rel="stylesheet" href="assets/css/style.css?v=20261024-chat-test-library-1">
 </head>
 <body>
     <nav class="navbar navbar-dark bg-primary"><div class="container-fluid">
         <span class="navbar-brand mb-0 h1">Phân công hội nghị</span>
         <div class="d-flex align-items-center gap-2 ms-auto">
             <div id="staffNotificationWrap" class="position-relative">
-                <button id="staffNotificationButton" type="button" class="btn btn-light position-relative" aria-label="Thông báo nhiệm vụ mới" aria-expanded="false" aria-controls="staffNotificationPanel">
+                <button id="staffNotificationButton" type="button" class="btn btn-light position-relative" aria-label="Thông báo nhiệm vụ chưa xem" aria-expanded="false" aria-controls="staffNotificationPanel">
                     <span aria-hidden="true">🔔</span>
                     <span id="staffNotificationBadge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill text-bg-danger" hidden>0</span>
                 </button>
@@ -26,28 +26,27 @@
     </div></nav>
     <main class="container py-4">
         <div class="mb-4"><h2 id="welcome">Nhiệm vụ và lịch báo cáo viên</h2><p class="text-muted mb-0">Danh sách phân công dùng chung cho người nhận nhiệm vụ và báo cáo viên. Thông tin liên hệ cá nhân không hiển thị tại đây.</p></div>
+        <div id="chatTestLibraryMount" class="mb-4"></div>
         <div id="message" class="alert alert-danger" hidden></div>
         <section id="publicAttendanceSection" class="card mb-4" hidden><div class="card-header d-flex justify-content-between align-items-center"><strong>Danh sách người dân đăng ký và điểm danh</strong><span id="publicAttendanceCount" class="badge text-bg-success">0</span></div><div id="publicAttendanceList" class="card-body"><span class="text-muted">Đang tải danh sách…</span></div></section>
         <section id="legalAidContactSection" class="card mb-4" hidden><div class="card-header d-flex justify-content-between align-items-center"><strong>Yêu cầu tư vấn được giao</strong><span id="legalAidContactCount" class="badge text-bg-info">0</span></div><div id="legalAidContactList" class="card-body"><span class="text-muted">Đang tải yêu cầu…</span></div></section>
         <section class="card mb-4"><div class="card-header d-flex justify-content-between align-items-center"><strong>Nhiệm vụ được giao</strong><span id="taskCount" class="badge text-bg-primary">0</span></div><div id="taskList" class="card-body"><span class="text-muted">Đang tải...</span></div></section>
         <section class="card"><div class="card-header d-flex justify-content-between align-items-center"><strong>Lịch báo cáo viên</strong><span id="speakerCount" class="badge text-bg-success">0</span></div><div id="speakerList" class="card-body"><span class="text-muted">Đang tải...</span></div></section>
     </main>
-    <script src="assets/js/config.js?v=20261011-quick-tunnel-test-2"></script>
-    <script src="assets/js/api.js?v=20261020-chat-planner-5"></script>
-    <script src="assets/js/auth.js?v=20261020-chat-layout-1"></script>
+    <script src="assets/js/config.js?v=20261023-service-status-1"></script>
+    <script src="assets/js/api.js?v=20261026-reschedule-plan-intent-1"></script>
+    <script src="assets/js/auth.js?v=20261025-plan-task-routing-1"></script>
     <script src="assets/js/attachments.js?v=20261005-attachment-management-4"></script>
     <script src="assets/js/attendance-tools.js?v=20261011-attendance-pages-1"></script>
+    <script src="assets/js/notification-read-state.js?v=20261027-notification-read-1"></script>
+    <script src="assets/js/chat-test-library.js?v=20261026-reschedule-plan-question-1"></script>
     <script>
         const currentUser = JSON.parse(localStorage.getItem("tgpl.user") || "null");
         const dateTime = value => value ? new Date(value).toLocaleString("vi-VN", { dateStyle: "medium", timeStyle: "short" }) : "Chưa xác định";
         function line(parent, text, className = "") { const div = document.createElement("div"); div.className = className; div.textContent = text; parent.appendChild(div); return div; }
         function conferenceInfo(item) { return `${item.conference_code || ""} · ${item.conference_title || "Hội nghị"} · ${item.organization_name || ""}`; }
-        const staffReadKey = `tgpl.staff-notifications.read.${currentUser?.id || currentUser?.username || "unknown"}`;
-        function readStaffNotificationIds() {
-            try { const ids = JSON.parse(localStorage.getItem(staffReadKey) || "[]"); return new Set(Array.isArray(ids) ? ids : []); }
-            catch { return new Set(); }
-        }
-        function saveStaffNotificationIds(ids) { localStorage.setItem(staffReadKey, JSON.stringify([...ids])); }
+        function readStaffNotificationIds() { return window.TGPLNotificationReadState?.read("staff", currentUser) || new Set(); }
+        function saveStaffNotificationId(id) { window.TGPLNotificationReadState?.mark("staff", currentUser, id); }
         function renderStaffNotifications(tasks, speakers, legalAidRequests = []) {
             const list = document.getElementById("staffNotificationList");
             const badge = document.getElementById("staffNotificationBadge");
@@ -87,11 +86,11 @@
                 link.append(title, detail);
                 link.addEventListener("click", event => {
                     event.preventDefault();
-                    readIds.add(item.noticeId); saveStaffNotificationIds(readIds);
+                    readIds.add(item.noticeId); saveStaffNotificationId(item.noticeId);
                     const target = document.getElementById(item.noticeId.replace(":", "-"));
                     panel.hidden = true; button.setAttribute("aria-expanded", "false");
                     if (target) { target.scrollIntoView({ behavior: "smooth", block: "center" }); target.classList.add("border-primary", "shadow"); window.setTimeout(() => target.classList.remove("border-primary", "shadow"), 2200); }
-                    renderStaffNotifications(tasks, speakers);
+                    renderStaffNotifications(tasks, speakers, legalAidRequests);
                 });
                 list.appendChild(link);
             });

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Phân tích nhu cầu TGPL - Đồng Nai</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="assets/css/style.css?v=20261020-chat-layout-1">
+    <link rel="stylesheet" href="assets/css/style.css?v=20261023-clear-conversation-1">
 </head>
 <body>
     <nav class="navbar navbar-dark bg-primary"><div class="container-fluid">
@@ -23,6 +23,7 @@
                 <div id="monthEndWrap" hidden><label for="endMonth" class="form-label mb-1">Đến tháng</label><input type="month" id="endMonth" class="form-control"></div>
                 <button id="refreshButton" class="btn btn-primary">Cập nhật</button>
                 <button id="downloadWordButton" class="btn btn-success"><i class="bi bi-file-earmark-word"></i> Tải báo cáo Word</button>
+                <button id="downloadExcelButton" class="btn btn-outline-success"><i class="bi bi-file-earmark-spreadsheet"></i> Tải báo cáo Excel</button>
             </div>
         </div>
         <input type="date" id="fromDate" hidden><input type="date" id="toDate" hidden>
@@ -84,9 +85,10 @@
         <p id="analysisNote" class="small text-muted"></p>
     </main>
     <script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>
-    <script src="assets/js/config.js?v=20261011-quick-tunnel-test-2"></script>
-    <script src="assets/js/api.js?v=20261020-chat-planner-5"></script>
-    <script src="assets/js/auth.js?v=20261020-chat-layout-1"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="assets/js/config.js?v=20261023-service-status-1"></script>
+    <script src="assets/js/api.js?v=20261023-six-turn-context-1"></script>
+    <script src="assets/js/auth.js?v=20261025-plan-task-routing-1"></script>
     <script>
         const dateTo = document.getElementById("toDate");
         const dateFrom = document.getElementById("fromDate");
@@ -349,6 +351,65 @@
             button.disabled = true;
             try { await generateNarrativeReport(); setMessage(`Đã tạo file báo cáo Word ${reportPeriodLabel()}.`, "success"); }
             catch (error) { setMessage(error.message || "Không tạo được báo cáo Word."); }
+            finally { button.disabled = false; }
+        });
+
+        function exportSafeText(value) {
+            const text = String(value ?? "");
+            return /^[=+@\\-]/.test(text) ? `'${text}` : text;
+        }
+        function exportExcelReport() {
+            if (!latestAnalysisData) throw new Error("Chưa có dữ liệu báo cáo. Hãy bấm Cập nhật trước.");
+            const XLSX = window.XLSX;
+            if (!XLSX?.utils) throw new Error("Thư viện xuất Excel chưa tải được. Kiểm tra kết nối Internet rồi tải lại trang.");
+            let user = null;
+            try { user = JSON.parse(localStorage.getItem("tgpl.user") || "null"); } catch {}
+            if (window.TGPL_AUTH_ENABLED && user?.role !== "ADMIN") throw new Error("Chức năng tải báo cáo Excel chỉ dành cho quản trị viên.");
+
+            const data = latestAnalysisData;
+            const areas = data.areas || [];
+            const statuses = data.status_counts || {};
+            const conferences = latestConferences.filter(item => isWithinReportPeriod(item.start_time))
+                .sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
+            const impacts = latestImpactData.filter(item => isWithinReportPeriod(item.start_time));
+            const total = key => areas.reduce((sum, area) => sum + Number(area[key] || 0), 0);
+            const rows = [
+                ["BÁO CÁO PHÂN TÍCH HỘI NGHỊ VÀ NHU CẦU TGPL"],
+                ["Khoảng báo cáo", reportPeriodLabel()],
+                ["Ngày lập", new Date().toLocaleString("vi-VN")],
+                ["Tổng hội nghị theo ngày tổ chức", conferences.length],
+                ["Đăng ký / chờ duyệt / đã duyệt / hoàn thành", `${statuses.registered_count || 0} / ${statuses.pending_count || 0} / ${statuses.approved_count || 0} / ${statuses.completed_count || 0}`],
+                ["Đề xuất dời lịch / từ chối / đã hủy", `${statuses.rescheduled_count || 0} / ${statuses.rejected_count || 0} / ${statuses.cancelled_count || 0}`],
+                ["Người tham dự dự kiến / thực tế", `${total("expected_participants")} / ${total("actual_participants")}`],
+                ["Lượt tiếp cận / chuyển gửi / vụ việc TGPL", `${total("contacts_count")} / ${total("referrals_count")} / ${total("cases_count")}`],
+                ["Địa bàn có báo cáo tiếp cận", `${areas.filter(area => area.reporting_periods > 0).length} / ${areas.length}`],
+                ["Dự báo lượt tiếp cận kỳ tới", data.forecast_next_month?.value == null ? "Chưa đủ dữ liệu" : `${data.forecast_next_month.value} (${data.forecast_next_month.month || ""})`],
+                ["Ghi chú", exportSafeText(data.note || "Số liệu phản ánh dữ liệu đã ghi nhận trong hệ thống.")]
+            ];
+            const workbook = XLSX.utils.book_new();
+            const addSheet = (name, values, widths = []) => {
+                const sheet = XLSX.utils.aoa_to_sheet(values);
+                if (widths.length) sheet["!cols"] = widths.map(wch => ({ wch }));
+                XLSX.utils.book_append_sheet(workbook, sheet, name);
+            };
+            addSheet("Tong hop", rows, [42, 76]);
+            addSheet("Dia ban", [["Địa bàn", "Số hội nghị", "Chờ duyệt", "Đã duyệt", "Hoàn thành", "Dời lịch", "Người dự kiến", "Người thực tế", "Lượt tiếp cận", "Chuyển gửi", "Vụ việc", "Kỳ báo cáo", "Mức nhu cầu"], ...areas.map(area => [exportSafeText(area.name), area.conference_count, area.pending_count, area.approved_count, area.completed_count, area.rescheduled_count, area.expected_participants, area.actual_participants, area.contacts_count, area.referrals_count, area.cases_count, area.reporting_periods, exportSafeText(({ HIGH: "Cao", MODERATE: "Trung bình", LOW_REPORTED: "Thấp theo số liệu đã báo cáo", NO_DATA: "Chưa có dữ liệu" })[area.demand_level] || area.demand_level)])], [30, 16, 14, 14, 14, 14, 18, 18, 18, 16, 14, 14, 28]);
+            addSheet("Trang thai", [["Trạng thái", "Số lượng"], ["Đăng ký trong kỳ", statuses.registered_count || 0], ["Chờ phê duyệt", statuses.pending_count || 0], ["Đã phê duyệt", statuses.approved_count || 0], ["Đã hoàn thành", statuses.completed_count || 0], ["Đề xuất dời lịch", statuses.rescheduled_count || 0], ["Từ chối", statuses.rejected_count || 0], ["Đã hủy", statuses.cancelled_count || 0]], [32, 18]);
+            addSheet("Chu de hoi nghi", [["Nội dung / tiêu đề", "Số hội nghị", "Hoàn thành", "Người dự kiến"], ...(data.most_frequent_conference_contents || []).map(item => [exportSafeText(item.content_title), item.conference_count, item.completed_count, item.expected_participants])], [54, 18, 18, 20]);
+            addSheet("Chu de TGPL", [["Chủ đề", "Lượt tiếp cận", "Vụ việc"], ...(data.topic_demand || []).map(item => [exportSafeText(item.topic), item.contacts_count, item.cases_count])], [48, 18, 14]);
+            addSheet("Nhom doi tuong", [["Nhóm đối tượng", "Lượt tiếp cận", "Vụ việc"], ...(data.population_group_demand || []).map(item => [exportSafeText(item.population_group), item.contacts_count, item.cases_count])], [48, 18, 14]);
+            addSheet("Xu huong thang", [["Tháng", "Lượt tiếp cận", "Chuyển gửi", "Vụ việc", "Địa bàn báo cáo"], ...(data.monthly_trend || []).map(item => [exportSafeText(item.month), item.contacts, item.referrals, item.cases, item.reporting_areas])], [20, 18, 16, 14, 20]);
+            addSheet("De xuat", [["Mức ưu tiên", "Địa bàn", "Căn cứ"], ...(data.recommendations || []).map(item => [exportSafeText(({ HIGH: "Ưu tiên cao", REVIEW: "Rà soát", COLLECT_DATA: "Bổ sung dữ liệu", MONITOR: "Theo dõi" })[item.priority] || item.priority), exportSafeText(item.organization_name), exportSafeText(item.reason)])], [20, 32, 80]);
+            addSheet("Theo doi tac dong", [["Hội nghị", "Địa bàn", "Trước", "Sau", "Biến động", "Mức đủ dữ liệu"], ...impacts.map(item => [exportSafeText(item.title), exportSafeText(item.organization_name), `${item.before_contacts} (${item.before_periods} kỳ)`, `${item.after_contacts} (${item.after_periods} kỳ)`, item.observed_change_percent == null ? "Chưa đủ dữ liệu" : `${item.observed_change_percent > 0 ? "+" : ""}${item.observed_change_percent}%`, item.evidence_status === "COMPARABLE" ? "Đủ kỳ so sánh" : "Thiếu kỳ báo cáo"])], [44, 32, 22, 22, 20, 22]);
+            addSheet("Danh sach hoi nghi", [["Mã", "Tiêu đề", "Nội dung", "Đơn vị", "Thời gian bắt đầu", "Địa điểm", "Trạng thái", "Người dự kiến", "Người thực tế"], ...conferences.map(item => [exportSafeText(item.code), exportSafeText(item.title), exportSafeText(item.description), exportSafeText(item.organization_name), item.start_time ? new Date(item.start_time).toLocaleString("vi-VN") : "", exportSafeText(item.location_name || item.location_address), exportSafeText(item.status), item.expected_participants, item.actual_participants])], [16, 42, 56, 32, 24, 38, 22, 18, 18]);
+            const period = `${dateFrom.value}_${dateTo.value}`;
+            XLSX.writeFile(workbook, `Bao-cao-phan-tich-TGPL-${period}.xlsx`);
+        }
+        document.getElementById("downloadExcelButton").addEventListener("click", () => {
+            const button = document.getElementById("downloadExcelButton");
+            button.disabled = true;
+            try { exportExcelReport(); setMessage(`Đã tạo file báo cáo Excel ${reportPeriodLabel()}.`, "success"); }
+            catch (error) { setMessage(error.message || "Không tạo được báo cáo Excel."); }
             finally { button.disabled = false; }
         });
 

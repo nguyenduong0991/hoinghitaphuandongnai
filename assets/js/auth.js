@@ -6,6 +6,9 @@
     };
 
     function redirectToLogin() {
+        const user = readUser();
+        const userKey = String(user?.id || user?.username || user?.email || user?.role || "").toLowerCase().replace(/[^a-z0-9_-]/g, "_");
+        if (userKey) { try { sessionStorage.removeItem(`tgpl.ai.context.${userKey}`); } catch {} }
         const target = `${location.pathname}${location.search}`;
         location.replace(`login.html?return=${encodeURIComponent(target)}`);
     }
@@ -87,6 +90,7 @@
         const logOut = () => {
             const userKey = String(user.id || user.username || user.email || user.role).toLowerCase().replace(/[^a-z0-9_-]/g, "_");
             localStorage.removeItem(`tgpl.ai.conversation.${userKey}`);
+            try { sessionStorage.removeItem(`tgpl.ai.context.${userKey}`); } catch {}
             localStorage.removeItem("tgpl.accessToken");
             localStorage.removeItem("tgpl.user");
             location.replace("login.html");
@@ -257,7 +261,7 @@
             if (!document.getElementById("tgplAssistantScript")) {
                 const assistantScript = document.createElement("script");
                 assistantScript.id = "tgplAssistantScript";
-                assistantScript.src = "assets/js/topic-assistant.js?v=20261020-chat-layout-1";
+                assistantScript.src = "assets/js/topic-assistant.js?v=20261026-reschedule-plan-intent-1";
                 assistantScript.async = true;
                 document.body.appendChild(assistantScript);
             }

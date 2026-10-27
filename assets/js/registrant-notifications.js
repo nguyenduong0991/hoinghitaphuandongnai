@@ -6,6 +6,9 @@
     const list = document.getElementById("registrantNotificationList");
     const refreshButton = document.getElementById("refreshRegistrantNotifications");
     if (!wrap || !button || !panel || !badge || !list || !refreshButton) return;
+    let currentUser = null;
+    try { currentUser = JSON.parse(localStorage.getItem("tgpl.user") || "null"); } catch { currentUser = null; }
+    const notificationId = item => `conference:${item.id}:${item.status || ""}:${item.reschedule_response || ""}:${item.updated_at || item.created_at || "current"}`;
 
     const statusLabels = {
         PENDING: "Đang chờ phê duyệt",
@@ -38,8 +41,10 @@
         try {
             const result = await getMyConferenceNotifications();
             const conferences = result.data || [];
-            badge.textContent = String(conferences.length);
-            badge.hidden = conferences.length === 0;
+            const readIds = window.TGPLNotificationReadState?.read("registrant", currentUser) || new Set();
+            const unread = conferences.filter(item => !readIds.has(notificationId(item)));
+            badge.textContent = String(unread.length);
+            badge.hidden = unread.length === 0;
             list.replaceChildren();
             if (!conferences.length) {
                 const empty = document.createElement("div");
@@ -56,6 +61,10 @@
                 title.className = "fw-semibold text-decoration-none";
                 title.href = `conference-list.html?id=${encodeURIComponent(conference.id)}`;
                 title.textContent = `${conference.code ? `${conference.code} · ` : ""}${conference.title || "Hội nghị chưa có tiêu đề"}`;
+                const seen = document.createElement("span");
+                seen.className = `badge rounded-pill ${readIds.has(notificationId(conference)) ? "text-bg-light text-secondary" : "text-bg-primary"} ms-2`;
+                seen.textContent = readIds.has(notificationId(conference)) ? "Đã xem" : "Mới";
+                title.appendChild(seen);
                 const details = document.createElement("div");
                 details.className = "mt-2";
                 addLine(details, "Trạng thái đăng ký", statusLabels[conference.status] || conference.status || "Chưa xác định");
@@ -96,6 +105,14 @@
                     actions.append(accept, decline); item.appendChild(actions);
                 }
                 item.addEventListener("click", () => {
+                    const id = notificationId(conference);
+                    readIds.add(id);
+                    window.TGPLNotificationReadState?.mark("registrant", currentUser, id);
+                    const remaining = conferences.filter(entry => !readIds.has(notificationId(entry))).length;
+                    badge.textContent = String(remaining);
+                    badge.hidden = remaining === 0;
+                    seen.className = "badge rounded-pill text-bg-light text-secondary ms-2";
+                    seen.textContent = "Đã xem";
                     panel.hidden = true;
                     button.setAttribute("aria-expanded", "false");
                 });
@@ -113,6 +130,7 @@
 
     function enableForUser(user) {
         const isRegistrant = user?.role === "COMMUNE";
+        currentUser = user || null;
         wrap.hidden = !isRegistrant;
         wrap.style.display = isRegistrant ? "" : "none";
         if (isRegistrant) refreshNotifications();
@@ -131,6 +149,10 @@
         }
     });
     window.addEventListener("tgpl:authenticated", event => enableForUser(event.detail?.user));
+    enableForUser(window.tgplCurrentUser || currentUser);
+    window.addEventListener("storage", event => {
+        if (event.key?.startsWith("tgpl.notification-read.registrant.")) refreshNotifications();
+    });
     window.setInterval(() => {
         if (!wrap.hidden && window.tgplCurrentUser?.role === "COMMUNE") refreshNotifications();
     }, 60 * 1000);

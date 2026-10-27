@@ -31,7 +31,7 @@ pause
 exit /b 1
 :ollama_ready
 echo Ollama va mo hinh Qwen da san sang.
-start "TGPL Backend 3001" cmd /k "cd /d D:\DuAnTGPL\backend && set PORT=3001&& npm run db:migrate:v22 && set PORT=3001&& npm start"
+start "TGPL Backend 3001" cmd /k "cd /d D:\DuAnTGPL\backend && set PORT=3001&& npm run db:migrate:v22 && npm run db:migrate:v23 && set PORT=3001&& npm start"
 start "TGPL Giao dien 8080" cmd /k "cd /d D:\DuAnTGPL\hoinghitaphuandongnai && set PORT=8080&& npm start"
 
 timeout /t 10 /nobreak >nul

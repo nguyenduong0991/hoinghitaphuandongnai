@@ -8,6 +8,14 @@ const STORAGE_KEYS = {
     organizations: "tgpl.organizations.v1"
 };
 
+function clearSessionChatContext() {
+    try {
+        const user = JSON.parse(localStorage.getItem("tgpl.user") || "null");
+        const userKey = String(user?.id || user?.username || user?.email || user?.role || "").toLowerCase().replace(/[^a-z0-9_-]/g, "_");
+        if (userKey) sessionStorage.removeItem(`tgpl.ai.context.${userKey}`);
+    } catch {}
+}
+
 async function apiRequest(endpoint, options = {}) {
     if (API_BASE_URL) {
         const response = await fetch(`${API_BASE_URL}${endpoint}`, {
@@ -23,6 +31,7 @@ async function apiRequest(endpoint, options = {}) {
         const data = await response.json().catch(() => null);
         if (!response.ok) {
             if (response.status === 401 && !endpoint.startsWith("/auth/")) {
+                clearSessionChatContext();
                 localStorage.removeItem("tgpl.accessToken");
                 localStorage.removeItem("tgpl.user");
                 const target = `${window.location.pathname}${window.location.search}`;
@@ -59,6 +68,7 @@ async function streamTgplChat(question, { mode = "auto", history = [], onMeta, o
     if (!response.ok) {
         const data = await response.json().catch(() => null);
         if (response.status === 401) {
+            clearSessionChatContext();
             localStorage.removeItem("tgpl.accessToken");
             localStorage.removeItem("tgpl.user");
             const target = `${window.location.pathname}${window.location.search}`;
@@ -106,11 +116,11 @@ async function streamTgplChat(question, { mode = "auto", history = [], onMeta, o
 async function submitAiAnswerFeedback(feedback) {
     return apiRequest("/ai/tgpl-chat/feedback", { method: "POST", body: JSON.stringify(feedback) });
 }
-async function createConferencePlanProposal(question) {
-    return apiRequest("/ai/conference-plan-proposal", { method: "POST", body: JSON.stringify({ question }) });
+async function createConferencePlanProposal(question, history = [], signal) {
+    return apiRequest("/ai/conference-plan-proposal", { method: "POST", body: JSON.stringify({ question, history }), signal });
 }
-async function reviewAdminDailyIntake() {
-    return apiRequest("/ai/admin/daily-intake-review", { method: "POST", body: "{}" });
+async function reviewAdminDailyIntake(signal) {
+    return apiRequest("/ai/admin/daily-intake-review", { method: "POST", body: "{}", signal });
 }
 async function getConferencePlanNotifications() {
     return apiRequest("/ai/conference-plan-notifications/mine");
@@ -164,6 +174,15 @@ async function submitNeedSurvey(survey) {
 async function getMyNeedSurveys() { return apiRequest("/surveys/mine"); }
 async function getNeedSurveyReport() { return apiRequest("/surveys"); }
 async function getParticipationConferences() { return apiRequest("/participation-conferences"); }
+async function getConferenceRegistrationOrganizations(id) {
+    return apiRequest(`/conferences/${encodeURIComponent(id)}/registration-organizations`);
+}
+async function setConferenceRegistrationOrganizations(id, organizationIds) {
+    return apiRequest(`/conferences/${encodeURIComponent(id)}/registration-organizations`, {
+        method: "PUT",
+        body: JSON.stringify({ organization_ids: organizationIds })
+    });
+}
 async function registerForConference(registration) {
     return apiRequest("/attendance-registrations", { method: "POST", body: JSON.stringify(registration) });
 }
@@ -414,7 +433,7 @@ async function getApprovedDateConflicts(id, startTime, endTime) {
 async function getMyAssignments() { return apiRequest("/my-assignments"); }
 async function getMyReminders() { return apiRequest("/my-reminders"); }
 async function suggestConferenceTopics(description) { return apiRequest("/ai/conference-topic-advisor", { method: "POST", body: JSON.stringify({ description }) }); }
-async function generateConferencePlan(id) { return apiRequest(`/ai/conferences/${encodeURIComponent(id)}/plan`, { method: "POST", body: "{}" }); }
+async function generateConferencePlan(id, options = {}) { return apiRequest(`/ai/conferences/${encodeURIComponent(id)}/plan`, { method: "POST", body: JSON.stringify(options) }); }
 async function getMyStaffChangeRequests() { return apiRequest("/my-assignments/change-requests"); }
 async function createStaffChangeRequest(request) {
     return apiRequest("/my-assignments/change-requests", { method: "POST", body: JSON.stringify(request) });

@@ -6,7 +6,7 @@
     <title>Báo cáo phân công · TGPL Đồng Nai</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="assets/css/style.css?v=20261020-chat-layout-1">
+    <link rel="stylesheet" href="assets/css/style.css?v=20261023-clear-conversation-1">
 </head>
 <body>
     <nav class="navbar navbar-dark bg-primary"><div class="container-fluid">
@@ -41,9 +41,9 @@
         <section class="card"><div class="card-header fw-semibold">Báo cáo viên (chỉ thống kê, không đánh giá)</div><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th>Báo cáo viên</th><th>Đơn vị</th><th>Lượt phân công</th><th>Số hội nghị</th><th>Chuyên đề</th></tr></thead><tbody id="speakerRows"></tbody></table></div></section>
         <p class="small text-muted mt-3 mb-0">Trang báo cáo này chỉ dành cho quản trị viên. Chức năng đánh giá chỉ áp dụng cho người nhận nhiệm vụ; báo cáo viên chỉ được thống kê lượt phân công và chuyên đề.</p>
     </main>
-    <script src="assets/js/config.js?v=20261011-quick-tunnel-test-2"></script>
-    <script src="assets/js/api.js?v=20261020-chat-planner-5"></script>
-    <script src="assets/js/auth.js?v=20261020-chat-layout-1"></script>
+    <script src="assets/js/config.js?v=20261023-service-status-1"></script>
+    <script src="assets/js/api.js?v=20261023-six-turn-context-1"></script>
+    <script src="assets/js/auth.js?v=20261025-plan-task-routing-1"></script>
     <script>
         const form = document.getElementById("filterForm");
         const message = document.getElementById("reportMessage");
@@ -69,6 +69,7 @@
                 addText(card, task.title, "fw-semibold");
                 addText(card, `${task.conference_code || ""} · ${task.conference_title || "Hội nghị"} · ${reportDateTime(task.start_time)}`, "small text-muted");
                 addText(card, `Trạng thái: ${taskStatusLabels[task.status] || task.status}${task.due_at ? ` · Hạn: ${reportDateTime(task.due_at)}` : ""}`, "small mt-1");
+                if (task.completed_at) addText(card, `Hoàn thành lúc: ${reportDateTime(task.completed_at)}`, "small text-success mt-1");
                 if (task.description) addText(card, task.description, "small mt-2");
                 if (task.evaluation_rating) addText(card, `Đánh giá hiện tại: ${task.evaluation_rating}/5 · ${evaluationLabels[task.evaluation_rating]}${task.evaluated_at ? ` · ${reportDateTime(task.evaluated_at)} bởi ${task.evaluator_name || "admin"}` : ""}`, "small text-success mt-2");
                 if (task.evaluation_note) addText(card, `Nhận xét: ${task.evaluation_note}`, "small mt-1");

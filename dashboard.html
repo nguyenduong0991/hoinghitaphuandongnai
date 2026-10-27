@@ -25,7 +25,7 @@
     <!-- CSS của hệ thống -->
     <link
         rel="stylesheet"
-        href="assets/css/style.css?v=20261020-chat-layout-1"
+        href="assets/css/style.css?v=20261024-chat-test-library-1"
     >
 </head>
 
@@ -115,7 +115,7 @@
                     </div>
                 </div>
                 <div id="adminNotificationWrap" class="admin-only position-relative" hidden>
-                    <button id="adminNotificationButton" type="button" class="btn btn-outline-primary position-relative" aria-label="Thông báo yêu cầu đang chờ" aria-expanded="false" aria-controls="adminNotificationPanel">
+                    <button id="adminNotificationButton" type="button" class="btn btn-outline-primary position-relative" aria-label="Thông báo chưa xem" aria-expanded="false" aria-controls="adminNotificationPanel">
                         <i class="bi bi-bell-fill" aria-hidden="true"></i>
                         <span class="ms-1 d-none d-sm-inline">Thông báo</span>
                         <span id="adminNotificationBadge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill text-bg-danger" hidden>0</span>
@@ -173,6 +173,8 @@
             </div>
             <div class="report-footnote"><i class="bi bi-info-circle"></i> Số liệu và biểu đồ là tổng hợp toàn hệ thống; danh sách hội nghị gần đây bên dưới chỉ gồm địa bàn của tài khoản. Tỷ lệ so sánh là biến động quan sát được, không phải kết luận về nguyên nhân.</div>
         </section>
+
+        <div id="chatTestLibraryMount" class="mb-4"></div>
 
         <section class="admin-dashboard-only" hidden>
 <h5 class="section-label mt-4">Tổng quan toàn hệ thống</h5>
@@ -367,12 +369,14 @@
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- JavaScript của hệ thống -->
-    <script src="assets/js/config.js?v=20261011-quick-tunnel-test-2"></script>
-    <script src="assets/js/api.js?v=20261020-chat-planner-5"></script>
-    <script src="assets/js/auth.js?v=20261020-chat-layout-1"></script>
+    <script src="assets/js/config.js?v=20261023-service-status-1"></script>
+    <script src="assets/js/api.js?v=20261026-reschedule-plan-intent-1"></script>
+    <script src="assets/js/auth.js?v=20261025-plan-task-routing-1"></script>
     <script src="assets/js/app.js?v=20261005-dashboard-role-topics-1"></script>
-    <script src="assets/js/admin-notifications.js?v=20261018-ai-optimization-1"></script>
-    <script src="assets/js/registrant-notifications.js?v=20261006-reschedule-response-1"></script>
+    <script src="assets/js/notification-read-state.js?v=20261027-notification-read-1"></script>
+    <script src="assets/js/admin-notifications.js?v=20261027-notification-read-1"></script>
+    <script src="assets/js/registrant-notifications.js?v=20261027-notification-read-1"></script>
     <script src="assets/js/password-toggle.js?v=20261017-password-toggle-1"></script>
+    <script src="assets/js/chat-test-library.js?v=20261026-reschedule-plan-question-1"></script>
 </body>
 </html>

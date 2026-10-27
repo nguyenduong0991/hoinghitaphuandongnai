@@ -12,6 +12,7 @@
                 <header class="tgpl-ai-header">
                     <span class="tgpl-ai-header-icon" aria-hidden="true">✦</span>
                     <div><strong id="tgplAiTitle">Trợ lý AI TGPL</strong><small>Qwen 3 · xử lý trên laptop</small></div>
+                    <button id="tgplAiClear" type="button" class="tgpl-ai-clear" aria-label="Xóa hội thoại" title="Xóa hội thoại">Xóa hội thoại</button>
                     <button id="tgplAiResize" type="button" class="tgpl-ai-size" aria-label="Mở rộng khung chat" title="Mở rộng khung chat">↗</button>
                     <button id="tgplAiClose" type="button" class="tgpl-ai-close" aria-label="Đóng trợ lý AI">×</button>
                 </header>
@@ -22,7 +23,7 @@
                 <form id="tgplAiForm" class="tgpl-ai-form">
                     <label class="visually-hidden" for="tgplAiInput">Câu hỏi cho trợ lý AI</label>
                     <textarea id="tgplAiInput" rows="2" maxlength="1200" required placeholder="Nhập câu hỏi (ít nhất 10 ký tự)…"></textarea>
-                    <div class="tgpl-ai-form-footer"><small>AI chạy trên laptop, không gửi đến dịch vụ AI bên ngoài.</small><button type="submit" aria-label="Gửi câu hỏi">Gửi</button></div>
+                    <div class="tgpl-ai-form-footer"><small>AI chạy trên laptop. Ngữ cảnh giữ tối đa 6 lượt hỏi–đáp gần nhất; bấm “Xóa hội thoại” để xóa ngay.</small><button type="submit" aria-label="Gửi câu hỏi">Gửi</button></div>
                 </form>
             </section>
         </div>
@@ -35,18 +36,32 @@
     const messages = document.getElementById("tgplAiMessages");
     const assistant = document.getElementById("tgplAiAssistant");
     const resizeButton = document.getElementById("tgplAiResize");
+    const clearButton = document.getElementById("tgplAiClear");
     const header = panel.querySelector(".tgpl-ai-header");
     const conversationHistory = [];
     const userKey = String(user.id || user.username || user.email || user.role).toLowerCase().replace(/[^a-z0-9_-]/g, "_");
-    const conversationStorageKey = `tgpl.ai.conversation.${userKey}`;
+    const conversationStorageKey = `tgpl.ai.context.${userKey}`;
+    const conversationChannel = typeof BroadcastChannel === "function" ? new BroadcastChannel(`tgpl.ai.context.${userKey}`) : null;
     const openStorageKey = `tgpl.ai.open.${userKey}`;
     const positionStorageKey = `tgpl.ai.position.${userKey}`;
-    let savedTurns = [];
     let isGenerating = false;
-    try {
-        const stored = JSON.parse(localStorage.getItem(conversationStorageKey) || "[]");
-        if (Array.isArray(stored)) savedTurns = stored.filter(turn => turn && typeof turn.question === "string" && typeof turn.answer === "string").slice(-20);
-    } catch {}
+    let conversationVersion = 0;
+    let activeRequestController = null;
+    const maxContextMessages = 12;
+    function trimContextMessage(item) {
+        if (!item || !["user", "assistant"].includes(item.role) || typeof item.content !== "string") return null;
+        const content = item.content.trim();
+        return content ? { role: item.role, content } : null;
+    }
+    function limitConversationHistory(items) {
+        const valid = (Array.isArray(items) ? items : []).map(trimContextMessage).filter(Boolean);
+        const userIndexes = valid.map((item, index) => item.role === "user" ? index : -1).filter(index => index >= 0);
+        const firstKeptUser = userIndexes[Math.max(0, userIndexes.length - 6)] ?? Math.max(0, valid.length - maxContextMessages);
+        return valid.slice(firstKeptUser);
+    }
+    // Keep only a short working context in this browser tab. It survives page
+    // navigation, but is cleared on logout/expired login and never goes to localStorage.
+    try { localStorage.removeItem(`tgpl.ai.conversation.${userKey}`); } catch {}
     function setOpen(open, persist = true) {
         panel.hidden = !open;
         toggle.setAttribute("aria-expanded", String(open));
@@ -131,6 +146,50 @@
         messages.scrollTop = messages.scrollHeight;
         return bubble;
     }
+    function renderConversationHistory() {
+        const greeting = messages.firstElementChild;
+        messages.replaceChildren(greeting);
+        conversationHistory.forEach(item => addMessage(item.role === "user" ? "assistant-message-user" : "assistant-message-bot", item.content));
+    }
+    function clearConversation(broadcast = true) {
+        activeRequestController?.abort();
+        activeRequestController = null;
+        conversationVersion++;
+        conversationHistory.length = 0;
+        try { sessionStorage.removeItem(conversationStorageKey); } catch {}
+        renderConversationHistory();
+        addMessage("assistant-message-bot", "Đã xóa hội thoại và ngữ cảnh chat trong các tab đang mở của tài khoản này.");
+        if (broadcast) conversationChannel?.postMessage({ type: "clear" });
+    }
+    try {
+        const storedContext = JSON.parse(sessionStorage.getItem(conversationStorageKey) || "[]");
+        if (Array.isArray(storedContext)) {
+            conversationHistory.push(...limitConversationHistory(storedContext));
+            if (conversationHistory.length) {
+                renderConversationHistory();
+                sessionStorage.setItem(conversationStorageKey, JSON.stringify(conversationHistory));
+            }
+        }
+    } catch { try { sessionStorage.removeItem(conversationStorageKey); } catch {} }
+    if (conversationChannel) {
+        conversationChannel.addEventListener("message", event => {
+            if (event.data?.type === "clear") {
+                clearConversation(false);
+                return;
+            }
+            if (event.data?.type !== "history" || !Array.isArray(event.data.history) || isGenerating) return;
+            const shared = limitConversationHistory(event.data.history);
+            if (JSON.stringify(shared) === JSON.stringify(conversationHistory)) return;
+            conversationHistory.splice(0, conversationHistory.length, ...shared);
+            try { sessionStorage.setItem(conversationStorageKey, JSON.stringify(conversationHistory)); } catch {}
+            renderConversationHistory();
+        });
+    }
+    window.addEventListener("storage", event => {
+        if (event.key !== "tgpl.accessToken" || event.newValue !== null) return;
+        clearConversation(false);
+        conversationChannel?.close();
+    });
     function normalizedIntentText(text) {
         return String(text || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[đĐ]/g, "d").toLocaleLowerCase("vi-VN");
     }
@@ -201,21 +260,135 @@
         // A question that retrieves or summarizes existing records must stay on
         // the data-chat route, even when it contains words such as “đề xuất”,
         // “dự kiến tổ chức”, or “hội nghị”.
-        const asksForExistingData = /(?:phieu khao sat|khao sat|tong hop|thong ke|bao cao|bao nhieu|nhieu nhat|it nhat|danh sach|ra soat|tra cuu|tim hoi nghi|hoi nghi nao|noi dung hoi nghi nao|nhiem vu nao|cong viec nao|trang thai|ma hoi nghi|o dau|khi nao|ngay nao|thang\s*\d|quy\s*(?:i{1,3}|iv|[1-4]))/.test(normalized);
+        const asksSurveySynthesis = /(?:tu|dua vao|can cu).{0,50}(?:phieu khao sat|khao sat).{0,100}(?:chon|uu tien|de xuat|goi y|chu de|noi dung)/.test(normalized);
+        if (asksSurveySynthesis) return false;
+        const asksForTaskPlan = /(?:de xuat|lap|goi y).{0,80}(?:danh sach )?(?:cac )?nhiem vu.{0,40}(?:can giao|phan cong)|(?:nhiem vu|cong viec).{0,50}(?:chia|phan bo|sap xep|nguoi nhan|can giao)/.test(normalized);
+        // A planning request may also say “rà soát” and include a conference
+        // code. Route it to the planner before the broad lookup detector sees
+        // those retrieval terms; the planner still returns an uncommitted draft.
+        if (asksForTaskPlan && /hoi nghi|tap huan|hn[-\s]?\d{2,}/.test(normalized)) return true;
+        const asksForExistingData = /(?:phieu khao sat|khao sat|tong hop|thong ke|bao cao(?! vien)|bao nhieu|nhieu nhat|it nhat|danh sach|ra soat|tra cuu|tim hoi nghi|hoi nghi nao|noi dung hoi nghi nao|nhiem vu nao|cong viec nao|nhiem vu theo doi|kien nghi sau hoi nghi|chuyen thanh nhiem vu|trang thai|ma hoi nghi|o dau|khi nao|ngay nao|ai duoc phan cong|ai la bao cao vien)/.test(normalized);
         if (asksForExistingData) return false;
-
-        const asksForPlan = /(?:de xuat\s+(?:hoi nghi|tap huan|to chuc|lap|phuong an|ke hoach)|goi y\s+(?:to chuc|hoi nghi|tap huan|chu de)|lap ke hoach|len ke hoach|lap phuong an|xay dung phuong an|chuan bi to chuc|can to chuc|muon to chuc|giup toi to chuc|to chuc giup toi)/.test(normalized);
+        const asksForScheduleOptions = /(?:lua chon|phuong an|de xuat|goi y|tim phuong an).{0,60}(?:ngay|buoi|khung gio)|(?:ngay|buoi|khung gio).{0,60}(?:lua chon|phuong an|de xuat|goi y)/.test(normalized)
+            && /hoi nghi|tap huan|to chuc|hoi truong|lich/.test(normalized);
+        const asksForPlanningRecommendation = /(?:chon|uu tien|de xuat|goi y).{0,60}(?:chu de|noi dung|quy mo|so luong dai bieu|thoi luong|nhiem vu).{0,60}(?:hoi nghi|tap huan|to chuc)|(?:hoi nghi|tap huan).{0,60}(?:chu de|noi dung|quy mo|so luong dai bieu).{0,60}(?:uu tien|phu hop|de xuat|goi y)/.test(normalized);
+        const asksForPartnerPlan = /don vi.{0,60}phoi hop|phoi hop voi (?:don vi|co quan)|(?:goi y|de xuat|chon|tim).{0,50}(?:don vi|co quan).{0,40}phoi hop/.test(normalized);
+        const asksToReviewPlan = /(?:ra soat|danh gia|kiem tra).{0,60}(?:phuong an|ke hoach).{0,80}(?:lich|dia diem|nhan su|quy mo|rủi ro|rui ro)?/.test(normalized);
+        if (asksForScheduleOptions || asksForPlanningRecommendation || asksForTaskPlan || asksForPartnerPlan || asksToReviewPlan) return true;
+        const asksForPlan = /(?:de xuat\s+(?:hoi nghi|tap huan|chu de|noi dung|to chuc|lap|phuong an|ke hoach)|goi y\s+(?:to chuc|hoi nghi|tap huan|chu de|ke hoach)|lap ke hoach|len ke hoach|lap phuong an|xay dung phuong an|chuan bi to chuc|can to chuc|muon to chuc|giup toi to chuc|to chuc giup toi|moi nguoi dan du|muon tuyen truyen|tuyen truyen phap luat|mo buoi pho bien|pho bien phap luat)/.test(normalized);
         const namesAUnit = /(?:xa|phuong|don vi)\s+[a-z0-9]/.test(normalized);
-        const explicitPlan = /(?:lap|xay dung|len)\s+(?:ke hoach|phuong an)/.test(normalized);
+        const explicitPlan = /(?:lap|xay dung|len).{0,20}(?:ke hoach|phuong an)/.test(normalized);
         const mentionsEvent = /hoi nghi|tap huan|su kien|to chuc/.test(normalized);
-        const trainingForLocalAudience = /tap huan/.test(normalized) && /can bo|nguoi dan|cong chuc/.test(normalized) && (namesAUnit || /xa toi|phuong toi|don vi toi/.test(normalized));
+        const trainingForLocalAudience = /tap huan/.test(normalized) && (namesAUnit || /xa toi|phuong toi|don vi toi/.test(normalized));
+        const legalOutreachRequest = /(?:tuyen truyen|pho bien|mo buoi pho bien)/.test(normalized) && /(?:phap luat|luat|tro giup phap ly)/.test(normalized) && /(?:ba con|nguoi dan|don vi toi|ben toi|xa toi|phuong toi)/.test(normalized);
         // Natural requests often start with the action (“Tổ chức hội nghị…”),
         // rather than “Đề xuất/Lập kế hoạch…”. Route those to the planner only
         // when both an event and a target audience/place are named.
         const organizeForAudience = /^\s*to chuc\s+/.test(normalized)
             && /hoi nghi|tap huan|su kien/.test(normalized)
             && (namesAUnit || /can bo|nguoi dan|cong chuc/.test(normalized));
-        return explicitPlan || trainingForLocalAudience || organizeForAudience || (asksForPlan && (mentionsEvent || namesAUnit));
+        const asksAssignmentPlan = /(?:chon|goi y|phan cong|giao).{0,50}(?:bao cao vien|can bo|nhiem vu)/.test(normalized) && !asksForExistingData;
+        return explicitPlan || trainingForLocalAudience || legalOutreachRequest || organizeForAudience || asksAssignmentPlan || (asksForPlan && (mentionsEvent || namesAUnit));
+    }
+    function isPlanningFollowUp(text) {
+        const priorPlan = [...conversationHistory].reverse().find(item => item.role === "user" && isConferencePlanningQuestion(item.content));
+        if (!priorPlan) return false;
+        const normalized = normalizedIntentText(text);
+        // Named-account task counts/ratings are database lookups. They must
+        // start a fresh data query even when a conference plan is earlier in
+        // this chat, rather than inheriting the planner's missing fields.
+        if (/(?:tai khoan\s+[a-z0-9._-]+).{0,100}(?:nhiem vu|cong viec)/.test(normalized) &&
+            /(?:bao nhieu|diem trung binh|danh gia|tren\s*3\s*diem|cao hon\s*3)/.test(normalized)) return false;
+        // A lookup for a concrete conference or an existing record is a new
+        // data request, even if a previous planning turn mentioned dates,
+        // venues, staffing, or options. Without this guard those terms cause
+        // an unrelated lookup (e.g. “HN-0019 diễn ra ngày nào?”) to be sent
+        // to the planner and answered with a request for planning details.
+        const asksForExistingData = /(?:\bhn\s*[-–—]?\s*\d{2,}\b|hoi nghi nao|nhiem vu nao|tra cuu|liet ke|bao nhieu hoi nghi|thang\s+\d{1,2}|quy\s+(?:i{1,3}|iv|[1-4])|nam\s+\d{4}|trang thai|tinh trang|o dau|dia diem|khi nao|ngay nao|bao cao vien|ai duoc phan cong)/.test(normalized);
+        if (asksForExistingData) return false;
+        // A new legal lookup or a request to retrieve existing records starts a
+        // new topic. Short references to schedule, venue, staffing, or options
+        // stay attached to the recent planning request.
+        if (/(?:dieu\s*\d+|luat .* quy dinh|hoi nghi nao|nhiem vu nao|tra cuu|liet ke|bao nhieu hoi nghi)/.test(normalized)) return false;
+        return normalized.split(/\s+/).filter(Boolean).length <= 14 &&
+            /(?:\bcon\b|\bvay\b|\bthem\b|\bdoi\b|\bchon\b|phuong an|ke hoach|ngay|khung gio|dia diem|quy mo|so luong|nhiem vu|bao cao vien|don vi phoi hop)/.test(normalized);
+    }
+    function isConferencePlanReviewQuestion(text) {
+        const normalized = String(text || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[đĐ]/g, "d").toLowerCase();
+        return /(?:ra soat|danh gia|kiem tra).{0,70}(?:toan bo phuong an|phuong an nay|ke hoach nay|phuong an)/.test(normalized);
+    }
+    function explicitConferenceTaskPlanCode(text) {
+        const normalized = normalizedIntentText(text);
+        // “Ai đã được phân công/báo cáo viên?” asks for existing records; it
+        // must never create a draft plan merely because the wording contains
+        // “phân công” and “báo cáo viên”.
+        const asksForExistingAssignment = /(?:ai duoc phan cong|nguoi nao duoc phan cong|nguoi duoc phan cong|can bo nao duoc phan cong|ai la bao cao vien|bao cao vien nao|ai la nguoi thuyet trinh|da phan cong cho ai|ai dang nhan nhiem vu|nguoi nhan nhiem vu nao)/.test(normalized);
+        if (asksForExistingAssignment) return "";
+        const asksForTasks = /(?:de xuat|lap|goi y|ra soat).{0,90}(?:danh sach )?(?:cac )?nhiem vu|(?:nhiem vu|cong viec).{0,70}(?:can giao|phan cong)|(?:de xuat|lap|goi y|ra soat).{0,80}(?:phan cong|giao).{0,60}(?:can bo|bao cao vien|nhiem vu)|(?:phan cong|giao).{0,60}(?:can bo|bao cao vien|nhiem vu)|(?:de xuat|lap|goi y|ra soat).{0,60}(?:phuong an|ke hoach).{0,60}(?:to chuc|nhan su|can bo|bao cao vien)/.test(normalized);
+        const asksForReschedulePlan = /(?:lap|xay dung|de xuat|goi y).{0,55}(?:ke hoach|phuong an).{0,45}(?:doi lich|chuyen lich)|(?:doi lich|chuyen lich).{0,55}(?:hoi nghi|hn\s*[-–—]?\s*\d{2,})/.test(normalized);
+        if (!asksForTasks && !asksForReschedulePlan) return "";
+        return String(text || "").match(/\bHN\s*[-–—]?\s*\d{3,}\b/i)?.[0]?.toUpperCase().replace(/\s+/g, "").replace(/^(HN)(\d)/, "$1-$2") || "";
+    }
+    function isExplicitConferenceReschedulePlan(text) {
+        const normalized = normalizedIntentText(text);
+        return /(?:lap|xay dung|de xuat|goi y).{0,55}(?:ke hoach|phuong an).{0,45}(?:doi lich|chuyen lich)|(?:doi lich|chuyen lich).{0,55}(?:hoi nghi|hn\s*[-–—]?\s*\d{2,})/.test(normalized);
+    }
+    function conferenceTaskPlanAnswer(data, code) {
+        const plan = data.plan || data.alternatives?.[0] || null;
+        const conference = data.evidence?.conference || {};
+        if (!plan) {
+            const shortage = data.staffing_resolution?.shortage;
+            if (shortage) {
+                const availability = data.evidence?.available_staff_next_three_days || {};
+                const summarize = items => (items || []).slice(0, 5).map(person => `${person.full_name}${person.username ? ` (${person.username})` : ""}: ${(person.free_dates || []).join(", ")}`).join("; ") || "chưa có người phù hợp";
+                return `${code}: chưa có phương án nhân sự khả thi trong các khung đã rà soát (thiếu ${Number(shortage.staff || 0)} vị trí cán bộ, ${Number(shortage.speakers || 0)} vị trí báo cáo viên). Cán bộ rảnh 3 ngày tới: ${summarize(availability.task_assignees)}. Báo cáo viên: ${summarize(availability.speakers)}. Admin cần chọn hướng xử lý; chưa lưu phân công, chưa gửi thông báo.`;
+            }
+            return `${code}: hệ thống chưa tạo được bản nháp. Hãy kiểm tra hồ sơ hội nghị và thử lại. Chưa lưu phân công, chưa gửi thông báo.`;
+        }
+        const chosen = (data.alternatives || []).find(option => option.id === plan.id) || plan;
+        const staffing = chosen.staffing_plan || plan.staffing_plan || {};
+        const roster = [
+            ...(data.eligible_task_assignees || data.evidence?.eligible_task_assignees || []),
+            ...(data.eligible_speakers || data.evidence?.eligible_speakers || []),
+            ...(staffing.staff?.primary || []), staffing.staff?.backup,
+            staffing.speakers?.primary, staffing.speakers?.backup
+        ].filter(Boolean);
+                const people = new Map();
+        for (const person of roster) {
+            const key = String(person.id);
+            people.set(key, { ...(people.get(key) || {}), ...person });
+        }
+        const tasks = (chosen.tasks || []).map((task, index) => {
+            const person = people.get(String(task.assignee_user_id));
+            const assignee = person ? `${person.full_name}${person.username ? ` (${person.username})` : ""}` : "cần admin chọn";
+            const basis = person ? `; ${person.organization_name || "đơn vị chưa ghi nhận"}; tải ${person.monthly_count ?? "?"}/5 nhiệm vụ tháng, ${person.weekly_count ?? "?"}/2 nhiệm vụ tuần` : "";
+            const deadline = task.due_at ? new Date(task.due_at).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "chưa xác định";
+            return `• ${task.title} — ${assignee}${task.staffing_role === "BACKUP_SUPPORT" ? " (dự bị)" : " (chính thức)"}${basis}; hạn ${deadline}`;
+        });
+        const staffBackup = staffing.staff?.backup;
+        const staffBackupAlreadyListed = (chosen.tasks || []).some(task => task.staffing_role === "BACKUP_SUPPORT" && String(task.assignee_user_id) === String(staffBackup?.id));
+        const staffBackupLine = staffBackupAlreadyListed
+            ? ""
+            : staffBackup
+                ? `\n• Cán bộ dự bị — ${staffBackup.full_name || "chưa rõ tên"}${staffBackup.username ? ` (${staffBackup.username})` : ""}; tải ${staffBackup.monthly_count ?? "?"}/5 nhiệm vụ tháng, ${staffBackup.weekly_count ?? "?"}/2 nhiệm vụ tuần.`
+                : "\n• Cán bộ dự bị — chưa có dữ liệu xác nhận trong phương án; admin cần bổ sung trước khi duyệt.";
+        const speakers = (chosen.speakers || []).map(speaker => {
+            const person = people.get(String(speaker.speaker_user_id));
+            const account = person ? `${person.full_name}${person.username ? ` (${person.username})` : ""}` : "cần admin xác nhận";
+            const load = person ? `; tải ${person.monthly_count ?? "?"}/3 nhiệm vụ tháng, ${person.weekly_count ?? "?"}/1 nhiệm vụ tuần` : "";
+            return `• ${account} — ${speaker.staffing_role === "BACKUP" ? "dự bị" : "chính thức"}${load}; ${speaker.presentation_title || speaker.topic || conference.title || "chuyên đề hội nghị"}`;
+        });
+        const chosenDate = (data.evidence?.available_dates || []).find(option => option.id === chosen.schedule_option_id);
+        const date = chosenDate?.start_time ? new Date(chosenDate.start_time).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "chưa có ngày khả thi";
+        const formatDateRange = (start, end) => start ? `${new Date(start).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}${end ? ` đến ${new Date(end).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}` : ""}` : "chưa ghi nhận";
+        const dateKey = value => value ? new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(value)) : "";
+        const requestedDateChanged = Boolean(conference.requested_start && chosenDate?.start_time && dateKey(conference.requested_start) !== dateKey(chosenDate.start_time));
+        const explicitReschedule = Boolean(data.staffing_resolution?.requested_reschedule);
+        const scheduleLine = requestedDateChanged || explicitReschedule
+            ? `• Lịch hồ sơ hiện tại: ${formatDateRange(conference.requested_start, conference.requested_end)}. Phương án nhân sự đề xuất ngày ${date} sau khi kiểm tra lịch và hạn mức; đây là đề xuất đổi lịch, lịch hiện tại chưa thay đổi và cần admin phê duyệt.\n`
+            : `• Thời gian đề xuất: ${date}.\n`;
+        const location = conference.location || "chưa cập nhật";
+        return `Phương án nháp ${code} — ${conference.title || "hội nghị"} (${conference.status || "chưa rõ trạng thái"})\n${scheduleLine}• Địa điểm hồ sơ: ${location}.\n• Nhiệm vụ:\n${tasks.join("\n") || "• Chưa có nhiệm vụ khả thi được xác nhận."}${staffBackupLine}\n• Báo cáo viên:\n${speakers.join("\n") || "• Chưa có báo cáo viên phù hợp được xác nhận."}\n• Căn cứ: hạn mức, tải phân công và lịch đã lưu; các nội dung chuyên môn chưa có dữ liệu được đánh dấu để admin rà soát.\nĐây chỉ là phương án chờ admin phê duyệt. Chưa lưu phân công và chưa gửi thông báo cho người đăng ký.`;
     }
     function buildConferencePlanningPrompt(question) {
         // Keep the original user query as the API's request field. The backend
@@ -223,17 +396,88 @@
         // caused the model to mistake guidance text for the event title.
         return String(question || "").trim();
     }
+    function isConferenceMaterialsQuestion(text) {
+        const normalized = String(text || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[đĐ]/g, "d").toLowerCase();
+        return /(?:tai lieu|giay to|ho so tai lieu|ho so can chuan bi).{0,45}(?:hoi nghi|tap huan|buoi nay)|(?:can chuan bi|chuan bi).{0,45}(?:tai lieu|giay to)/.test(normalized);
+    }
+    function isLegalAidDocumentsFollowUp(text) {
+        const normalizeText = value => String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[đĐ]/g, "d").toLowerCase();
+        const normalized = normalizeText(text);
+        const asksForDocuments = /giay to|ho so|nguoi yeu cau.{0,60}chuan bi/.test(normalized);
+        if (!asksForDocuments) return false;
+        if (/tro giup phap ly|\btgpl\b|luat tro giup|yeu cau tro giup|dieu\s*29/.test(normalized)) return true;
+        // “Người yêu cầu cần chuẩn bị giấy tờ gì?” is a legal-procedure
+        // follow-up even when the current sentence omits the law's name.
+        if (/nguoi yeu cau/.test(normalized)) return true;
+        const recentTopics = conversationHistory.filter(item => item.role === "user").slice(-6);
+        for (const item of recentTopics.reverse()) {
+            const prior = normalizeText(item.content);
+            if (/tro giup phap ly|\btgpl\b|luat tro giup|yeu cau tro giup|doi tuong duoc tro giup/.test(prior)) return true;
+            if (/hoi nghi|tap huan|buoi tap huan/.test(prior)) return false;
+        }
+        return false;
+    }
+    function isGenericTaskFrameworkQuestion(text) {
+        const normalized = normalizedIntentText(text);
+        return /(?:chia|phan nhom|gom).{0,45}(?:nhiem vu|cong viec).{0,45}(?:truoc|trong|sau)|(?:nhiem vu|cong viec).{0,40}(?:truoc|trong).{0,30}sau/.test(normalized)
+            && !/(?:phan cong lai|chon nguoi|ai lam|ma hoi nghi|hn-\d+)/.test(normalized);
+    }
+    function genericTaskFrameworkAnswer() {
+        return "Khung nhiệm vụ tham khảo (chưa tạo hoặc giao việc):\n• Trước hội nghị: trước 7 ngày xác nhận địa điểm, chương trình và đại biểu; trước 3 ngày hoàn tất giấy mời, tài liệu; trước 1 ngày kiểm tra hội trường và thiết bị. Đầu ra: danh sách xác nhận, bộ tài liệu và biên bản kiểm tra.\n• Trong hội nghị: đón tiếp, điểm danh, hỗ trợ kỹ thuật và ghi biên bản; hoàn thành trong ngày. Đầu ra: danh sách tham dự và biên bản.\n• Sau hội nghị: trong 1–3 ngày làm việc thu phiếu đánh giá, tổng hợp kết quả và kiến nghị. Đầu ra: báo cáo kết quả, số liệu tham dự và danh sách việc cần theo dõi.\nMuốn đặt hạn theo lịch thực tế hoặc gợi ý người nhận, hãy cung cấp mã/ngày hội nghị; mọi phân công vẫn cần admin xác nhận.";
+    }
+    function isTrainingTopicSuggestion(text) {
+        const normalized = String(text || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[đĐ]/g, "d").toLowerCase();
+        return /(?:de xuat|goi y).{0,20}chu de/.test(normalized) && /tap huan/.test(normalized);
+    }
+    function trainingTopicSuggestionAnswer() {
+        return "Gợi ý chủ đề: “Quyền được trợ giúp pháp lý, nhận diện nhóm người được trợ giúp và cách gửi yêu cầu”. Với 40 cán bộ, có thể tổ chức theo hướng thực hành tình huống và quy trình hướng dẫn người dân. Đây là gợi ý chủ đề; khi lập kế hoạch đầy đủ, cần xác định đơn vị và thời gian, đồng thời rà soát tài liệu pháp luật hiện hành.";
+    }
+    function conferenceMaterialsAnswer() {
+        const recent = conversationHistory.slice(-6);
+        const normalizeText = value => String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[đĐ]/g, "d").toLowerCase();
+        const eventQuestion = [...recent].reverse().find(item => item.role === "user" && /hoi nghi|tap huan|to chuc/.test(normalizeText(item.content)));
+        if (!eventQuestion) return "Bạn đang hỏi về hội nghị/tập huấn nào? Hãy cho biết chủ đề hoặc mã hội nghị để tôi gợi ý tài liệu đúng nội dung.";
+        const normalized = normalizeText(eventQuestion.content);
+        const topicDocs = /tro giup phap ly|tgpl/.test(normalized)
+            ? "văn bản Luật Trợ giúp pháp lý đã được kiểm tra hiệu lực; tài liệu nhận diện đối tượng và cách gửi yêu cầu; tình huống hỏi đáp đã ẩn thông tin cá nhân"
+            : "văn bản pháp luật chính thức còn hiệu lực liên quan chủ đề; đề cương/bài trình chiếu; tình huống hỏi đáp đã rà soát";
+        return `Với hội nghị/tập huấn vừa trao đổi, nên chuẩn bị: ${topicDocs}; chương trình và mục tiêu buổi tập huấn; danh sách đại biểu, giấy mời và phiếu điểm danh; phiếu đánh giá sau hội nghị; máy chiếu, âm thanh và bản tài liệu phát tay.`;
+    }
     function isClearFollowUpQuestion(text) {
         const normalized = String(text || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[đĐ]/g, "d").toLowerCase().trim();
-        return /^(?:con\b|vay\b|the\b|neu vay\b|cu the\b|noi ro hon\b|giai thich them\b|y toi la\b|truong hop do\b|cau tra loi do\b|van de nay\b|hoi nghi do\b|muc do\b|con ve\b)/.test(normalized)
-            || /\b(?:van de nay|cau tren|cau tra loi vua roi|noi dung vua neu|hoi nghi do|don vi do|muc do|theo y tren)\b/.test(normalized);
+        return /^(?:con\b|vay\b|the\b|neu vay\b|cu the\b|noi ro hon\b|giai thich them\b|y toi la\b|truong hop do\b|cau tra loi do\b|van de nay\b|hoi nghi do\b|hoi nghi nay\b|muc do\b|con ve\b)/.test(normalized)
+            || /\b(?:van de nay|cau tren|cau tra loi vua roi|noi dung vua neu|hoi nghi do|hoi nghi nay|don vi do|muc do|theo y tren)\b/.test(normalized);
     }
     function planningAnswer(data) {
         const plan = data.proposal || {};
-        const slot = data.selected_time_slot?.label ? `\nKhung giờ gợi ý: ${data.selected_time_slot.label}.` : "";
+        const resolution = data.staffing_resolution || {};
+        if (resolution.status === "STAFFING_SHORTAGE") {
+            const shortage = resolution.shortage || {};
+            const options = (resolution.admin_options || []).map((item, index) => `${index + 1}. ${item}`).join("\n");
+            const available = data.available_staff_next_three_days || {};
+            const summarize = people => (people || []).slice(0, 5).map(person => `${person.full_name} (${(person.free_dates || []).join(", ")})`).join("; ") || "chưa có người phù hợp";
+            return `Chưa thể đề xuất phân công hoàn chỉnh: đang thiếu ${Number(shortage.staff || 0)} vị trí cán bộ và ${Number(shortage.speakers || 0)} vị trí báo cáo viên theo cơ cấu yêu cầu. Tôi không tạo danh sách phân công thiếu hoặc vượt hạn mức.\nNgười đủ hạn mức, trống lịch trong 3 ngày tới — cán bộ: ${summarize(available.task_assignees)}; báo cáo viên: ${summarize(available.speakers)}.\nAdmin có thể chọn một hướng xử lý:\n${options}\nChưa lưu phân công và chưa gửi thông báo.`;
+        }
+        const availableSlots = Array.isArray(data.available_time_slots) ? data.available_time_slots.slice(0, 3) : [];
+        const slotList = availableSlots.map((item, index) => `${index + 1}) ${item.label}`).join("; ");
+        const slot = data.selected_time_slot?.label
+            ? `\n${resolution.status === "ALTERNATIVE_DATE_REQUIRED" ? "Khung sớm hơn không đủ người theo hạn mức; đây là ngày thay thế đã được kiểm tra đủ nhân sự. " : ""}Khung giờ khả dụng (chưa lưu): ${slotList || data.selected_time_slot.label}. Mặc định chọn ${data.selected_time_slot.label}; có thể đổi trong thẻ xác nhận.`
+            : "";
         const units = (plan.suggested_units || []).map(item => item.name).filter(Boolean).join(", ");
         const documents = (plan.documents || []).slice(0, 5).join("; ");
-        return `Bản gợi ý kế hoạch (chưa lưu, chưa gửi thông báo):\n• Đơn vị/địa bàn: ${plan.organization_name || "cần xác nhận"}\n• Địa điểm: ${plan.location || "cần xác nhận"}${slot}\n• Quy mô dự kiến: ${plan.expected_attendees || "cần xác nhận"} người\n• Chủ đề: ${plan.legal_topic || "cần xác nhận"}\n• Tài liệu: ${documents || "cần xác định theo chủ đề"}\n• Căn cứ gợi ý: ${plan.rationale || "cần rà soát nhu cầu thực tế"}\n• Đơn vị có thể phối hợp: ${units || "cần admin chọn"}\n• Nhiệm vụ gợi ý: ${(plan.tasks || []).length}. Xác nhận từng mục bên dưới để điền biểu mẫu; thông báo chỉ gửi sau khi admin xác nhận từng đơn vị.`;
+        const staffing = plan.staffing_plan || {};
+        const staff = staffing.staff || {};
+        const speakers = staffing.speakers || {};
+        const staffNames = [...(staff.primary || []).map(person => `chính thức ${person.full_name}`), ...(staff.backup ? [`dự bị ${staff.backup.full_name}`] : [])].join(", ");
+        const speakerNames = [speakers.primary ? `chính thức ${speakers.primary.full_name}` : "", speakers.backup ? `dự bị ${speakers.backup.full_name}` : ""].filter(Boolean).join(", ");
+        const shortages = [];
+        const available = data.available_staff_next_three_days || {};
+        if (staff.primary_shortfall || !staff.backup_available) shortages.push(`Cán bộ còn thiếu; trống lịch 3 ngày tới: ${(available.task_assignees || []).slice(0, 5).map(person => `${person.full_name} (${person.free_dates.join(", ")})`).join("; ") || "chưa có người phù hợp"}`);
+        if (speakers.primary_shortfall || !speakers.backup_available) shortages.push(`Báo cáo viên còn thiếu; trống lịch 3 ngày tới: ${(available.speakers || []).slice(0, 5).map(person => `${person.full_name} (${person.free_dates.join(", ")})`).join("; ") || "chưa có người phù hợp"}`);
+        const staffingText = resolution.status === "ADMIN_ASSIGNMENT_REQUIRED"
+            ? "\n• Nhân sự chưa được gán trong bản gợi ý; admin sẽ kiểm tra hạn mức và lập phương án phân công phù hợp trước khi duyệt."
+            : `\n• Cán bộ: ${staffNames || "chưa đủ người phù hợp"} (tối đa 5 nhiệm vụ/tháng, 2/tuần mỗi người; 3 chính thức + 1 dự bị).\n• Báo cáo viên: ${speakerNames || "chưa đủ người phù hợp"} (tối đa 3 lượt/tháng, 1/tuần mỗi người; 1 chính thức + 1 dự bị).${shortages.length ? `\n• ${shortages.join("\n• ")}` : ""}`;
+        return `Bản gợi ý kế hoạch (chưa lưu, chưa gửi thông báo):\n• Đơn vị/địa bàn: ${plan.organization_name || "cần xác nhận"}\n• Địa điểm: ${plan.location || "cần xác nhận"}${slot}\n• Quy mô dự kiến: ${plan.expected_attendees || "cần xác nhận"} người\n• Chủ đề: ${plan.legal_topic || "cần xác nhận"}\n• Tài liệu: ${documents || "cần xác định theo chủ đề"}\n• Căn cứ gợi ý: ${plan.rationale || "cần rà soát nhu cầu thực tế"}${staffingText}\n• Đơn vị có thể phối hợp: ${units || "cần admin chọn"}\n• Nhiệm vụ gợi ý: ${(plan.tasks || []).length}. Xác nhận từng mục bên dưới để điền biểu mẫu; thông báo chỉ gửi sau khi admin xác nhận từng đơn vị.`;
     }
     function addProposalCard(answerBubble, data) {
         const plan = data.proposal || {};
@@ -266,11 +510,23 @@
             });
             row.appendChild(button); card.insertBefore(row, status);
         }
-        const timeSlot = data.selected_time_slot;
+        const availableSlots = Array.isArray(data.available_time_slots) ? data.available_time_slots : [];
+        let timeSlot = data.selected_time_slot || availableSlots[0] || null;
         const conferenceDraft = { title: plan.title || "", organization_id: plan.organization_id || "", organization_name: plan.organization_name || "",
             start_time: timeSlot?.start_time || "", end_time: timeSlot?.end_time || "", location: plan.location || "",
             expected_participants: plan.expected_attendees || "", description: [`Chủ đề đề xuất: ${plan.legal_topic || ""}`, plan.rationale || "",
                 "Tài liệu cần chuẩn bị:", ...(plan.documents || []).map((item, index) => `${index + 1}. ${item}`)].filter(Boolean).join("\n") };
+        if (availableSlots.length > 1) {
+            const slotLabel = document.createElement("label"); slotLabel.className = "form-label small fw-semibold"; slotLabel.textContent = "Chọn khung giờ khả dụng";
+            const slotSelect = document.createElement("select"); slotSelect.className = "form-select form-select-sm mb-2";
+            availableSlots.forEach(item => { const option = document.createElement("option"); option.value = item.id; option.textContent = item.label; slotSelect.appendChild(option); });
+            slotSelect.value = timeSlot?.id || availableSlots[0].id;
+            slotSelect.addEventListener("change", () => {
+                timeSlot = availableSlots.find(item => item.id === slotSelect.value) || availableSlots[0];
+                conferenceDraft.start_time = timeSlot.start_time; conferenceDraft.end_time = timeSlot.end_time;
+            });
+            card.insertBefore(slotLabel, status); card.insertBefore(slotSelect, status);
+        }
         addConfirmRow("Thông tin hội nghị", `${conferenceDraft.title} · ${conferenceDraft.location} · ${conferenceDraft.expected_participants} người`, "Xác nhận & điền biểu mẫu", async () => {
             if (!['ADMIN', 'COMMUNE'].includes(user.role)) throw new Error("Tài khoản này có thể xem phương án; chỉ admin hoặc người đăng ký mới được mở biểu mẫu hội nghị.");
             const form = document.getElementById("conferenceForm");
@@ -362,22 +618,6 @@
         answerBubble.after(tools);
     }
 
-    function renderSavedTurns() {
-        conversationHistory.splice(0, conversationHistory.length);
-        messages.replaceChildren();
-        if (!savedTurns.length) {
-            addMessage("assistant-message-bot", "Xin chào! Tôi có thể tổng hợp phiếu khảo sát, số liệu và báo cáo có sẵn trên website theo quyền tài khoản; tra cứu hội nghị, hướng dẫn sử dụng hệ thống và nhiệm vụ, hoặc tra cứu Luật Trợ giúp pháp lý.");
-            return;
-        }
-        savedTurns.forEach(turn => {
-            addMessage("assistant-message-user", turn.question);
-            const answer = addMessage("assistant-message-bot", turn.answer);
-            addAnswerTools(answer, turn.question, turn.answer, turn.sources || []);
-            conversationHistory.push({ role: "user", content: turn.question }, { role: "assistant", content: turn.answer });
-        });
-        messages.scrollTop = messages.scrollHeight;
-    }
-
     let inboxLoaded = false;
     const shownNoticeIds = new Set();
     async function loadPlanNotifications() {
@@ -409,15 +649,8 @@
         }
     }
 
-    if (savedTurns.length) renderSavedTurns();
     window.addEventListener("storage", event => {
-        if (event.key === conversationStorageKey && !isGenerating) {
-            try {
-                const stored = JSON.parse(event.newValue || "[]");
-                savedTurns = Array.isArray(stored) ? stored.filter(turn => turn && typeof turn.question === "string" && typeof turn.answer === "string").slice(-20) : [];
-                renderSavedTurns();
-            } catch {}
-        } else if (event.key === openStorageKey && event.newValue !== null) {
+        if (event.key === openStorageKey && event.newValue !== null) {
             setOpen(event.newValue === "true", false);
         }
     });
@@ -425,6 +658,7 @@
 
     toggle.addEventListener("click", () => { const opening = panel.hidden; setOpen(opening); if (opening) loadPlanNotifications(); });
     document.getElementById("tgplAiClose").addEventListener("click", () => setOpen(false));
+    clearButton.addEventListener("click", () => clearConversation());
     document.addEventListener("keydown", event => { if (event.key === "Escape" && !panel.hidden) setOpen(false); });
     form.addEventListener("submit", async event => {
         event.preventDefault();
@@ -435,6 +669,9 @@
             input.setCustomValidity("");
             return;
         }
+        const requestVersion = conversationVersion;
+        const requestController = new AbortController();
+        activeRequestController = requestController;
         addMessage("assistant-message-user", question);
         input.value = "";
         input.disabled = true;
@@ -451,27 +688,64 @@
         }, 15000);
         try {
             let result;
-            if (isAdminDailyIntakeQuestion(question)) {
-                result = await reviewAdminDailyIntake();
+            const taskPlanCode = explicitConferenceTaskPlanCode(question);
+            let signedInUser = null;
+            try { signedInUser = JSON.parse(localStorage.getItem("tgpl.user") || "null"); } catch {}
+            if (taskPlanCode) {
+                if (signedInUser?.role !== "ADMIN") {
+                    answerText = `Yêu cầu lập phương án phân công cho ${taskPlanCode} cần tài khoản admin để rà soát hồ sơ và lịch nhân sự. Tài khoản hiện tại chưa được phép xem dữ liệu phân công của hội nghị này.`;
+                } else {
+                    result = await generateConferencePlan(taskPlanCode, isExplicitConferenceReschedulePlan(question) ? { intent: "RESCHEDULE" } : {});
+                    if (requestVersion !== conversationVersion) return;
+                    answerText = conferenceTaskPlanAnswer(result.data || {}, taskPlanCode);
+                }
+                waiting.remove();
+                answerBubble = addMessage("assistant-message-bot", answerText);
+            } else if (isConferencePlanReviewQuestion(question) && !isPlanningFollowUp(question)) {
+                answerText = "Vui lòng cho mã hội nghị hoặc gửi nội dung phương án cần rà soát. Tôi sẽ kiểm tra lịch, địa điểm, nhân sự, quy mô và các điểm chưa xác minh; chưa thay đổi dữ liệu hay phân công.";
+                waiting.remove();
+                answerBubble = addMessage("assistant-message-bot", answerText);
+            } else if (isAdminDailyIntakeQuestion(question)) {
+                result = await reviewAdminDailyIntake(requestController.signal);
+                if (requestVersion !== conversationVersion) return;
                 answerText = dailyIntakeAnswer(result.data || {});
                 waiting.remove();
                 answerBubble = addMessage("assistant-message-bot", answerText);
                 addDailyIntakeReviewCard(answerBubble, result.data || {});
-            } else if (isConferencePlanningQuestion(question)) {
-                result = await createConferencePlanProposal(buildConferencePlanningPrompt(question));
-                answerText = planningAnswer(result.data || {});
+            } else if (isTrainingTopicSuggestion(question)) {
+                answerText = trainingTopicSuggestionAnswer();
                 waiting.remove();
                 answerBubble = addMessage("assistant-message-bot", answerText);
-                addProposalCard(answerBubble, result.data || {});
+            } else if (isConferenceMaterialsQuestion(question) && !isLegalAidDocumentsFollowUp(question)) {
+                answerText = conferenceMaterialsAnswer();
+                waiting.remove();
+                answerBubble = addMessage("assistant-message-bot", answerText);
+            } else if (isGenericTaskFrameworkQuestion(question)) {
+                answerText = genericTaskFrameworkAnswer();
+                waiting.remove();
+                answerBubble = addMessage("assistant-message-bot", answerText);
+            } else if (isConferencePlanningQuestion(question) || isPlanningFollowUp(question)) {
+                result = await createConferencePlanProposal(buildConferencePlanningPrompt(question), limitConversationHistory(conversationHistory), requestController.signal);
+                if (requestVersion !== conversationVersion) return;
+                answerText = result.data?.clarification || planningAnswer(result.data || {});
+                waiting.remove();
+                answerBubble = addMessage("assistant-message-bot", answerText);
+                if (!result.data?.clarification) addProposalCard(answerBubble, result.data || {});
             } else {
                 result = await streamTgplChat(question, {
                     mode: "auto",
-                    history: isClearFollowUpQuestion(question) ? conversationHistory.slice(-6) : [],
+                    // Keep a short, bounded conversation window on every turn.
+                    // The backend decides whether the current message is a follow-up;
+                    // sending no context for ordinary wording makes natural follow-ups
+                    // such as “còn địa điểm?” impossible to resolve consistently.
+                    history: limitConversationHistory(conversationHistory),
+                    signal: requestController.signal,
                     onMeta(meta) {
                         const labels = { fast: "Trả lời nhanh", legal_rag: "Tra cứu kho TGPL", deep_analysis: "Phân tích chuyên sâu" };
                         waiting.title = labels[meta.mode] || "Trợ lý AI";
                     },
                     onToken(token) {
+                        if (requestVersion !== conversationVersion) return;
                         if (!token) return;
                         if (!answerBubble) {
                             waiting.remove();
@@ -484,20 +758,23 @@
                     }
                 });
             }
+            if (requestVersion !== conversationVersion) return;
             if (!answerBubble) {
                 waiting.remove();
                 answerBubble = addMessage("assistant-message-bot", "Mô hình chưa trả về câu trả lời. Vui lòng thử lại.");
             }
-            addAnswerTools(answerBubble, question, answerText, result.sources || []);
+            const answerSources = result?.sources || [];
+            addAnswerTools(answerBubble, question, answerText, answerSources);
             if (answerText.trim()) {
-                savedTurns.push({ question, answer: answerText, sources: result.sources || [] });
-                savedTurns = savedTurns.slice(-20);
                 conversationHistory.push({ role: "user", content: question });
                 conversationHistory.push({ role: "assistant", content: answerText });
-                if (conversationHistory.length > 6) conversationHistory.splice(0, conversationHistory.length - 6);
-                try { localStorage.setItem(conversationStorageKey, JSON.stringify(savedTurns)); } catch {}
+                conversationHistory.splice(0, conversationHistory.length, ...limitConversationHistory(conversationHistory));
+                try { sessionStorage.setItem(conversationStorageKey, JSON.stringify(conversationHistory)); } catch {}
+                conversationChannel?.postMessage({ type: "history", history: conversationHistory });
             }
         } catch (error) {
+            if (requestVersion !== conversationVersion) return;
+            console.error("TGPL chatbot UI handling failed:", error);
             waiting.remove();
             const errorMessage = error.message || "Không kết nối được trợ lý AI. Hãy kiểm tra Ollama và thử lại.";
             if (answerBubble) {
@@ -509,6 +786,7 @@
         } finally {
             clearTimeout(slowNotice);
             isGenerating = false;
+            if (activeRequestController === requestController) activeRequestController = null;
             input.disabled = false;
             sendButton.disabled = false;
             input.focus();
