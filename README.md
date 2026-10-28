@@ -1,10 +1,10 @@
 # Hệ thống quản lý hội nghị TGPL Đồng Nai
 
-Repository này chứa giao diện web. Backend Node.js/Express, PostgreSQL và tệp tải lên nằm riêng tại `D:\DuAnTGPL\backend`; tất cả xã/phường dùng chung các bảng dữ liệu, không phân vùng hồ sơ theo đơn vị.
+Repository này chứa giao diện web và mã nguồn backend Node.js/Express trong thư mục `backend/`. PostgreSQL và tệp tải lên là dữ liệu vận hành, không được đưa vào Git.
 
 ## Khởi chạy lần đầu
 
-1. Trong `D:\DuAnTGPL\backend`, cài dependencies nếu cần, chạy migration V2 một lần bằng `npm run db:migrate:v2`, sau đó khởi động backend bằng `npm start`.
+1. Trong `backend/`, cài dependencies bằng `npm ci`; `npm start` tự chạy bộ kiểm thử trước khi khởi động. Với database mới, chỉ admin vận hành mới chạy `npm run db:init` một lần theo hướng dẫn triển khai.
 2. Trong repository giao diện này, chạy `npm start` để phục vụ giao diện tại `http://localhost:8080`.
 3. Mở `http://localhost:8080/login.html`. Lần đầu, tạo mật khẩu admin tối thiểu 12 ký tự. Sau đó vào **Quản lý tài khoản** để tạo tài khoản xã/phường.
 
@@ -22,4 +22,4 @@ Mỗi lần đẩy thay đổi lên nhánh `main`, GitHub Actions sẽ xuất b�
 
 GitHub Pages chỉ phục vụ giao diện tĩnh, không chạy backend. Khi không cấu hình API, dữ liệu chạy thử được lưu riêng trong local storage của từng trình duyệt; người dùng khác và máy khác không nhìn thấy dữ liệu đó. Đăng nhập, quyền admin, phê duyệt tập trung, tài liệu trên máy chủ, PostgreSQL và phân tích F09 chỉ hoạt động khi giao diện kết nối backend.
 
-Backend hiện chỉ chạy cục bộ ở `D:\DuAnTGPL\backend`, vì vậy website Pages chưa thể dùng chung dữ liệu hoặc đăng nhập bằng tài khoản admin hiện có. Để chạy thử các chức năng dùng chung trên Internet, cần triển khai backend và PostgreSQL lên máy chủ HTTPS, cấu hình CORS cho đúng tên miền Pages, lưu tệp bền vững và sao lưu dữ liệu. Không mở backend cục bộ hiện tại ra Internet.
+Mã nguồn backend đã được đưa vào kho để triển khai riêng. GitHub Pages chỉ phục vụ giao diện tĩnh; để dùng đăng nhập, dữ liệu tập trung và chức năng AI công khai ổn định, cần triển khai `backend/` cùng PostgreSQL trên máy chủ HTTPS, cấu hình CORS, lưu tệp bền vững và sao lưu. URL Quick Tunnel trong cấu hình frontend chỉ dùng thử nghiệm và có thể thay đổi/ngừng hoạt động; không coi đó là dịch vụ backend sản xuất.

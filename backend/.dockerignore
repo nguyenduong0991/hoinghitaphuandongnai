@@ -1,0 +1,12 @@
+node_modules/
+.env
+.env.*
+!.env.example
+uploads/**
+*.docx
+*.doc
+*.pdf
+*.xlsx
+*.xls
+*.log
+.git/

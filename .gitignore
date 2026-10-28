@@ -6,3 +6,15 @@ node_modules/
 /ai-finetuning/
 .codex-backups/
 *.bak
+
+# Backend local/runtime data and credentials
+backend/node_modules/
+backend/.env
+backend/.env.*
+!backend/.env.example
+!backend/.env.vps.example
+backend/uploads/
+backend/uploads-demo/
+backend/backups/
+backend/**/*.bak
+backend/**/*.log

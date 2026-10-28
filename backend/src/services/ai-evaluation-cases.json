@@ -1,0 +1,35 @@
+[
+  {"id":"NL-01","group":"natural","question":"Cuối tháng 11 có mấy buổi sắp diễn ra?","expected":"model_fallback"},
+  {"id":"NL-02","group":"natural","question":"Hội nghị HN-0011 tổ chức ở đâu?","expected":"conference_lookup"},
+  {"id":"NL-03","group":"natural","question":"Buổi tập huấn ở Long Bình đã được duyệt chưa?","expected":"model_fallback"},
+  {"id":"NL-04","group":"natural","question":"Tôi muốn xem lịch hội nghị về trợ giúp pháp lý gần đây.","expected":"conference_lookup"},
+  {"id":"NL-05","group":"natural","question":"Cho tôi biết việc nào còn dang dở.","expected":"tasks"},
+  {"id":"NL-06","group":"natural","question":"Còn bao nhiêu người đăng ký dự hội nghị HN-0011?","expected":"conference_attendance"},
+  {"id":"NL-07","group":"natural","question":"Người dự đã có mặt đủ chưa ở HN-0011?","expected":"conference_lookup_or_attendance"},
+  {"id":"NL-08","group":"natural","question":"Mấy hồ sơ chưa được duyệt trong tháng này?","expected":"model_fallback"},
+  {"id":"NL-09","group":"natural","question":"Tỷ giá hôm nay thế nào?","expected":"out_of_scope"},
+  {"id":"NL-10","group":"natural","question":"Hội nghị nào có số người dự kiến tham dự đông nhất?","expected":"conference_analysis"},
+  {"id":"MT-01","group":"multi_turn","turns":["HN-0011 diễn ra khi nào?","Còn địa điểm?"],"expected":"preserve_one_conference_code"},
+  {"id":"MT-02","group":"multi_turn","turns":["Có bao nhiêu hội nghị tháng 11/2026?","Liệt kê mã và trạng thái."],"expected":"inherit_period"},
+  {"id":"MT-03","group":"multi_turn","turns":["Người 17 tuổi có thuộc diện TGPL không?","Cần giấy tờ gì?"],"expected":"keep_legal_topic"},
+  {"id":"MT-04","group":"multi_turn","turns":["HN-0008 ở đâu?","Cho biết HN-0012.","Hội nghị đó khi nào?"],"expected":"use_latest_explicit_code"},
+  {"id":"MT-05","group":"multi_turn","turns":["HN-0001 và HN-0002 đang có lịch.","Hội nghị đó ở đâu?"],"expected":"clarify_multiple_codes"},
+  {"id":"AN-01","group":"analysis","question":"Chủ đề nào được đề xuất nhiều nhất trong khảo sát năm 2026?","expected":"survey"},
+  {"id":"AN-02","group":"analysis","question":"Đánh giá hiệu quả các hội nghị hoàn thành tháng 10/2026.","expected":"conference_analysis"},
+  {"id":"AN-03","group":"analysis","question":"So sánh số lượt đăng ký và điểm danh tháng 10 với tháng 11/2026.","expected":"conference_attendance"},
+  {"id":"AN-04","group":"analysis","question":"Địa bàn nào có nhiều hội nghị hoàn thành nhất trong quý III/2026?","expected":"conference_analysis"},
+  {"id":"AN-05","group":"analysis","question":"Dữ liệu hiện tại đủ để dự báo nhu cầu quý tới không?","expected":"model_fallback"},
+  {"id":"PL-01","group":"planning","question":"Giúp tôi tổ chức tập huấn Luật Trợ giúp pháp lý tại phường Long Bình.","expected":"conference_planning"},
+  {"id":"PL-02","group":"planning","question":"Lập kế hoạch hội nghị gần nhất nhưng không trùng lịch đơn vị.","expected":"conference_planning"},
+  {"id":"PL-03","group":"planning","question":"Đề xuất phân công cho hội nghị HN-0012.","expected":"conference_planning"},
+  {"id":"PL-04","group":"planning","question":"Nếu yêu cầu hội nghị trùng lịch đã duyệt thì cần xử lý thế nào?","expected":"model_fallback"},
+  {"id":"PL-05","group":"planning","question":"Không đủ người theo hạn mức, hãy gợi ý cách xử lý.","expected":"model_fallback"},
+  {"id":"LA-01","group":"legal","question":"Luật Trợ giúp pháp lý quy định những hình thức trợ giúp nào?","expected":"legal_aid"},
+  {"id":"LA-02","group":"legal","question":"Người yêu cầu trợ giúp pháp lý cần nộp giấy tờ gì?","expected":"legal_aid"},
+  {"id":"LA-03","group":"legal","question":"Người từ đủ 16 đến dưới 18 tuổi có được trợ giúp pháp lý không?","expected":"legal_aid"},
+  {"id":"LA-04","group":"legal","question":"Điều 7 Luật Trợ giúp pháp lý quy định gì?","expected":"legal_aid"},
+  {"id":"LA-05","group":"legal","question":"Nếu luật không quy định vấn đề tôi hỏi, tôi liên hệ đâu?","expected":"contact_referral"}
+]
+
+
+

@@ -30,7 +30,13 @@ pause
 exit /b 1
 :ollama_ready
 echo Ollama va mo hinh Qwen da san sang.
-start "TGPL Backend LAN 3001" cmd /k "cd /d D:\DuAnTGPL\backend && set PORT=3001&& npm run db:migrate:v22 && npm run db:migrate:v23 && set PORT=3001&& npm start"
+echo Kiem tra backend cu tren cong 3001...
+powershell -NoProfile -Command "$p = Get-NetTCPConnection -LocalPort 3001 -State Listen -ErrorAction SilentlyContinue; if ($p) { Write-Host 'Cong 3001 dang co tien trinh lang nghe. Hay dung backend cu bang cach an toan truoc.'; exit 1 }"
+if errorlevel 1 (
+    pause
+    exit /b 1
+)
+start "TGPL Backend LAN 3001" cmd /k "cd /d D:\DuAnTGPL\backend && set PORT=3001&& npm start"
 start "TGPL Giao dien LAN 8080" cmd /k "cd /d D:\DuAnTGPL\hoinghitaphuandongnai && set PORT=8080&& npm start"
 echo.
 echo Da khoi dong che do LAN. Tren cac may khac, mo http://DIA-CHI-IP-LAPTOP:8080/login.html

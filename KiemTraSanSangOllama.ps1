@@ -39,9 +39,15 @@ $body = @{
 } | ConvertTo-Json -Depth 5
 
 try {
+    $timer = [System.Diagnostics.Stopwatch]::StartNew()
     $response = Invoke-RestMethod -Uri "$baseUrl/api/chat" -Method Post -ContentType "application/json" -Body $body -TimeoutSec 180
+    $timer.Stop()
     if (-not $response.message) { throw "Ollama khong tra ve phan hoi model." }
-    Write-Output "Ollama san sang; da nap $model va giu model trong bo nho 30 phut."
+    $wallMs = [Math]::Round($timer.Elapsed.TotalMilliseconds)
+    $totalMs = if ($response.total_duration) { [Math]::Round($response.total_duration / 1000000) } else { "khong co" }
+    $loadMs = if ($response.load_duration) { [Math]::Round($response.load_duration / 1000000) } else { "khong co" }
+    $evalMs = if ($response.eval_duration) { [Math]::Round($response.eval_duration / 1000000) } else { "khong co" }
+    Write-Output "Ollama san sang; model $model; thoi gian nap/kiem tra HTTP ${wallMs}ms; total=${totalMs}ms load=${loadMs}ms eval=${evalMs}ms; giu model trong bo nho 30 phut."
 } catch {
     Write-Error "Khong nap duoc ${model}: $($_.Exception.Message)"
     exit 1
