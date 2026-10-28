@@ -306,6 +306,14 @@
         // to the planner and answered with a request for planning details.
         const asksForExistingData = /(?:\bhn\s*[-–—]?\s*\d{2,}\b|hoi nghi nao|nhiem vu nao|tra cuu|liet ke|bao nhieu hoi nghi|thang\s+\d{1,2}|quy\s+(?:i{1,3}|iv|[1-4])|nam\s+\d{4}|trang thai|tinh trang|o dau|dia diem|khi nao|ngay nao|bao cao vien|ai duoc phan cong)/.test(normalized);
         if (asksForExistingData) return false;
+        const planIndex = conversationHistory.lastIndexOf(priorPlan);
+        const lastAssistant = conversationHistory.slice(planIndex + 1).reverse().find(item => item.role === "assistant");
+        const assistantAskedForPlanSlot = Boolean(lastAssistant && /[?？]/.test(lastAssistant.content)
+            && /(?:vui long cho biet|can lam ro|xin cho biet|cho biet them)/.test(normalizedIntentText(lastAssistant.content))
+            && /(?:dia ban|don vi|thoi gian|thang nao|chu de|quy mo|doi tuong|dia diem)/.test(normalizedIntentText(lastAssistant.content)));
+        const shortClarificationAnswer = normalized.split(/\s+/).filter(Boolean).length <= 12
+            && /(?:\bxa\b|\bphuong\b|ubnd|thang\s+\d|quy\s+[1-4]|\b20\d{2}\b|can bo|nguoi dan|\d{1,4}\s*nguoi)/.test(normalized);
+        if (assistantAskedForPlanSlot && shortClarificationAnswer) return true;
         // A new legal lookup or a request to retrieve existing records starts a
         // new topic. Short references to schedule, venue, staffing, or options
         // stay attached to the recent planning request.

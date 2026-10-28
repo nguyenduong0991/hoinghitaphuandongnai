@@ -11,8 +11,7 @@
                 ["HN-05", "Hội nghị của UBND phường Trảng Dài đang ở trạng thái nào? Nếu có nhiều hội nghị, hãy nêu mã và trạng thái từng hội nghị."],
                 ["HN-06", "Rà soát các hội nghị dự kiến diễn ra trong tháng 11/2026, gồm cả hồ sơ chưa phê duyệt; nêu mã, đơn vị, ngày tổ chức và trạng thái."],
                 ["HN-07", "Tìm các hội nghị tổ chức tại Hội trường xã; cho biết mã, ngày giờ và trạng thái của từng hội nghị."],
-                ["HN-08", "Với hội nghị HN-0011, cho biết thời gian, địa điểm, báo cáo viên và người được phân công; ghi rõ trường nào chưa có dữ liệu."],
-                ["HN-09", "Hôm nay có bao nhiêu yêu cầu tổ chức hội nghị chưa được phê duyệt?"]
+                ["HN-08", "Với hội nghị HN-0011, cho biết thời gian, địa điểm, báo cáo viên và người được phân công; ghi rõ trường nào chưa có dữ liệu."]
             ]
         },
         {
@@ -45,8 +44,7 @@
             hint: "Chỉ gửi câu hỏi tạo yêu cầu tư vấn khi thật sự muốn gửi yêu cầu đến admin.",
             items: [
                 ["TV-01", "Tổng hợp các yêu cầu tư vấn chưa phân công ngày 25/10/2026?"],
-                ["TV-02", "Tôi đã gửi yêu cầu tư vấn, làm sao biết yêu cầu đã được tiếp nhận?"],
-                ["TV-03", "Hãy tổng hợp các yêu cầu tư vấn trong tháng 10/2026, gồm số lượng, trạng thái và nội dung chung; không hiển thị số điện thoại."]
+                ["TV-02", "Hãy tổng hợp các yêu cầu tư vấn trong tháng 10/2026, gồm số lượng, trạng thái và nội dung chung; không hiển thị số điện thoại."]
             ]
         },
         {
@@ -63,54 +61,6 @@
                 ["KH-08", "Lập kế hoạch dời lịch đối với Hội nghị HN-0001."]
             ]
         },
-    ];
-
-    const adminDialogues = [
-        {
-            title: "Tra cứu hội nghị rồi hỏi nối tiếp",
-            goal: "Kiểm tra chatbot giữ đúng mã hội nghị khi người dùng hỏi tiếp.",
-            turns: ["Hội nghị HN-0012 diễn ra khi nào và ở đâu?", "Hội nghị đó có trạng thái gì?", "Ai là báo cáo viên của hội nghị đó?"]
-        },
-        {
-            title: "Chuyển từ hội nghị sang pháp luật",
-            goal: "Câu hỏi pháp luật mới không được kéo dữ liệu hội nghị cũ sang.",
-            turns: ["Hội nghị HN-0008 tổ chức ở đâu?", "Luật Trợ giúp pháp lý quy định những hình thức trợ giúp nào?"]
-        },
-        {
-            title: "Câu hỏi pháp luật nhiều lượt",
-            goal: "Câu nối tiếp phải tập trung vào yêu cầu mới và trích đúng căn cứ.",
-            turns: ["Luật quy định những hình thức trợ giúp pháp lý nào?", "Người yêu cầu cần chuẩn bị giấy tờ gì?"]
-        },
-        {
-            title: "Hỏi lại mốc thời gian khảo sát",
-            goal: "Khi thiếu kỳ báo cáo, chatbot hỏi làm rõ; câu trả lời tiếp theo xác định kỳ cần dùng.",
-            turns: ["Tổng hợp các chủ đề được quan tâm trong khảo sát.", "Toàn bộ năm 2026."]
-        },
-        {
-            title: "Nhiệm vụ theo khoảng thời gian",
-            goal: "Kiểm tra việc giữ phạm vi thời gian và chỉ liệt kê đúng trạng thái được hỏi.",
-            turns: ["Nhiệm vụ nào của tôi sắp đến hạn trong 7 ngày tới?", "Chỉ cho tôi các việc quá hạn nhưng chưa hoàn thành."]
-        },
-        {
-            title: "Từ câu hỏi nội bộ sang câu độc lập",
-            goal: "Câu hỏi ngoài phạm vi không được nhận câu trả lời thay thế từ hội nghị ở lượt trước.",
-            turns: ["Hội nghị HN-0008 tổ chức khi nào?", "Tài liệu nội bộ STAFF_TRAINING có nội dung gì?", "Hội nghị HN-0012 diễn ra ở đâu?"]
-        },
-        {
-            title: "Đề xuất kế hoạch nhưng chưa phê duyệt",
-            goal: "AI chỉ đề xuất phương án; không tự điền biểu mẫu hoặc tạo phân công.",
-            turns: ["Giúp tôi đề xuất tập huấn về Luật Trợ giúp pháp lý tại xã Bù Gia Mập.", "Hãy nêu các phương án ngày, khung giờ và quy mô khả thi.", "Tôi chọn phương án 2; hãy cho tôi xem lại cán bộ, báo cáo viên và nhiệm vụ trước khi lưu."]
-        },
-        {
-            title: "Đổi mã hội nghị khi đề xuất phân công",
-            goal: "Mỗi mã HN được truy vấn độc lập; đổi mã thì dữ liệu hồ sơ, lịch và nhân sự phải đổi theo mã mới, không tái sử dụng phương án trước.",
-            turns: ["Hãy đề xuất phân công cán bộ và báo cáo viên cho hội nghị HN-0001?", "Đổi sang hội nghị HN-0012: hãy đề xuất phân công cán bộ và báo cáo viên."]
-        },
-        {
-            title: "Phân biệt yêu cầu tư vấn với hội nghị",
-            goal: "Kiểm tra chatbot nhận diện đúng nhu cầu liên hệ, không trả đề xuất tổ chức hội nghị.",
-            turns: ["Tôi cần liên hệ như thế nào để được tư vấn?", "Tôi muốn gửi yêu cầu để được trợ giúp pháp lý về giấy tờ đất đai."]
-        }
     ];
 
     const roleCatalogs = {
@@ -144,12 +94,7 @@
                     ["XP-19", "Hãy tổng hợp các yêu cầu tư vấn do người dân gửi đến đơn vị tôi trong tháng này; nếu chưa xác định được tháng, hãy hỏi lại."]
                 ]}
             ],
-            dialogues: [
-                { title: "Theo dõi hồ sơ hội nghị", goal: "Giữ mã hội nghị cho câu nối tiếp, nhưng không kéo thông tin sang chủ đề mới.", turns: ["Hội nghị HN-0012 của đơn vị tôi đang ở trạng thái nào?", "Hội nghị đó tổ chức ngày nào và ở đâu?", "Chuyển chủ đề: phiếu khảo sát của đơn vị tôi trong năm 2026 có chủ đề nào được nhắc đến?"] },
-                { title: "Từ khảo sát đến gợi ý kế hoạch", goal: "Tóm tắt dữ liệu trước, sau đó đưa gợi ý có ghi rõ đâu là nhận định.", turns: ["Các nhóm đối tượng tham dự được đề xuất trong phiếu khảo sát của đơn vị tôi là gì?", "Chủ đề nào phù hợp để tổ chức tập huấn cho các nhóm đó?", "Hãy nêu quy mô dự kiến và thông tin còn cần đơn vị tôi xác nhận."] },
-                { title: "Phân biệt đăng ký hội nghị và yêu cầu TGPL", goal: "Không nhầm thủ tục trên hệ thống với hồ sơ yêu cầu trợ giúp pháp lý.", turns: ["Tôi cần đăng ký đơn vị tham dự hội nghị đã được mời như thế nào?", "Chuyển sang câu hỏi pháp luật: người dân yêu cầu trợ giúp pháp lý cần giấy tờ gì?"] },
-                { title: "Xếp hạng nhu cầu và đánh giá phương án", goal: "Xếp theo số lượt thực tế, giữ đồng hạng và đánh giá phương án dựa trên dữ liệu khảo sát.", turns: ["Trong năm 2026, xếp hạng các chủ đề được quan tâm trong khảo sát của đơn vị tôi, kèm số lượt.", "Chủ đề nào đồng hạng? Không chọn chủ đề thắng nếu số lượt bằng nhau.", "Đánh giá chủ đề phù hợp nhất để tổ chức hội nghị và nêu căn cứ, hạn chế của nhận định."] }
-            ]
+
         },
         TASK_ASSIGNEE: {
             label: "Người nhận nhiệm vụ",
@@ -182,12 +127,7 @@
                     ["NV-20", "Tổng hợp tiến độ các nhiệm vụ tư vấn đã được giao cho tôi trong tháng này."]
                 ]}
             ],
-            dialogues: [
-                { title: "Nhiệm vụ theo đúng khoảng thời gian", goal: "Đảm bảo câu nối tiếp giữ kỳ vừa nêu và lọc trạng thái chính xác.", turns: ["Nhiệm vụ nào của tôi đến hạn trong 7 ngày tới?", "Trong số đó, việc nào đã hoàn thành?", "Còn việc nào quá hạn nhưng chưa hoàn thành?"] },
-                { title: "Tra cứu nhiệm vụ rồi hỏi hội nghị", goal: "Dùng mã hội nghị chỉ khi đã xác định chắc chắn từ kết quả được phép xem.", turns: ["Tôi được phân công việc gì cho HN-0011?", "Hội nghị đó tổ chức ở đâu và khi nào?", "Ai là báo cáo viên của hội nghị đó, nếu lịch được giao có ghi nhận?"] },
-                { title: "Chuyển từ nhiệm vụ sang tư vấn pháp lý", goal: "Không dùng hội nghị cũ thay cho câu hỏi tư vấn mới.", turns: ["Yêu cầu tư vấn nào đang được giao cho tôi?", "Chuyển chủ đề: hồ sơ yêu cầu trợ giúp pháp lý cần giấy tờ gì?"] },
-                { title: "Xếp ưu tiên và đánh giá tiến độ", goal: "Tổng hợp theo hạn, phân biệt hoàn thành với còn mở và không sửa dữ liệu.", turns: ["Tổng hợp nhiệm vụ của tôi trong tháng này, kèm trạng thái.", "Xếp các nhiệm vụ chưa hoàn thành theo mức độ cần xử lý sớm, căn cứ vào hạn.", "Đánh giá tiến độ chung và nêu việc nào cần tôi cập nhật trước; chỉ dựa trên dữ liệu được giao."] }
-            ]
+
         },
         SPEAKER: {
             label: "Báo cáo viên",
@@ -220,12 +160,7 @@
                     ["BCV-20", "Tôi không thấy lịch báo cáo viên trong tài khoản; cần kiểm tra những thông tin nào trước khi báo admin?"]
                 ]}
             ],
-            dialogues: [
-                { title: "Lịch báo cáo viên và câu hỏi nối tiếp", goal: "Giữ đúng hội nghị/lịch vừa tra cứu; không bịa trường dữ liệu còn thiếu.", turns: ["Lịch báo cáo viên của tôi trong 7 ngày tới gồm những buổi nào?", "Buổi đó diễn ra ở đâu và về chủ đề gì?", "Tôi nên xác nhận những gì với đơn vị tổ chức?"] },
-                { title: "Chuẩn bị bài và câu hỏi dự phòng", goal: "Tạo nội dung hỗ trợ báo cáo viên, có căn cứ và phù hợp thời lượng.", turns: ["Tôi chuẩn bị báo cáo 20 phút về Luật Trợ giúp pháp lý.", "Gợi ý dàn ý ngắn và 5 câu hỏi dự phòng cho người tham dự.", "Chỉ rõ nội dung nào cần kiểm tra lại trong văn bản luật trước khi trình bày."] },
-                { title: "Chuyển chủ đề và giới hạn kết luận", goal: "Chuyển khỏi chủ đề bài báo cáo khi người dùng hỏi tình huống riêng; không kết luận vụ việc.", turns: ["Gợi ý câu hỏi thảo luận về đối tượng được trợ giúp pháp lý.", "Chuyển sang tình huống cá nhân: chỉ với thông tin này có thể kết luận một người đủ điều kiện không? Nếu thiếu dữ kiện, hãy nêu rõ."] },
-                { title: "Xếp lịch và đánh giá mức độ sẵn sàng", goal: "Tổng hợp lịch theo thứ tự, đánh giá dựa trên trường có dữ liệu và nói rõ giới hạn.", turns: ["Liệt kê lịch báo cáo viên của tôi trong tháng này theo thứ tự gần đến xa.", "Xếp buổi nào cần chuẩn bị trước và giải thích dựa trên thời gian, chủ đề, tài liệu hiện có.", "Đánh giá mức độ sẵn sàng từng buổi; đánh dấu rõ dữ liệu nào chưa có để tôi xác nhận."] }
-            ]
+
         }
     };
 
@@ -245,7 +180,6 @@
         hint: "Câu hỏi được xử lý theo quyền hiện tại; chatbot không mở rộng phạm vi dữ liệu.",
         items: [["HT-01", "Tôi có thể tra cứu những thông tin nào trong phạm vi tài khoản của mình?"], ["HT-02", "Hướng dẫn tôi sử dụng chức năng hiện tại trên trang này."]]
     }]);
-    const dialogues = activeRole === "ADMIN" ? adminDialogues : (roleCatalog?.dialogues || []);
 
     function create(tag, className, text) {
         const node = document.createElement(tag);
