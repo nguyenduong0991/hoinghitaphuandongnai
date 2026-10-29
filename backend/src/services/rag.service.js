@@ -138,8 +138,10 @@ function classifyQuestion(question) {
     const isWebsiteReportQuestion = !isLegalAidQuestion && asksForReport && (mentionsWebsiteData || mentionsReportPeriod);
     const mentionsConferenceCode = /\b(?:hn|hcn|conf)[-_ ]?\d{2,}\b/i.test(String(question || ""));
     const hasNamedOrganization = /\b(?:xa|phuong|don vi)\s+[a-z0-9]/.test(normalized);
+    const isConferenceOrganizationStatusLookup = mentionsConference && hasNamedOrganization &&
+        /(?:trang thai|tinh trang|phe duyet|dang o trang thai)/.test(normalized);
     const isConferenceOrganizationSummaryQuestion = mentionsConference && hasNamedOrganization &&
-        (asksForReport || /ket qua.{0,40}(?:dang ky|hoi nghi)|(?:dang ky|hoi nghi).{0,40}ket qua|trang thai|phe duyet|dang o trang thai/.test(normalized));
+        (asksForReport || isConferenceOrganizationStatusLookup || /ket qua.{0,40}(?:dang ky|hoi nghi)|(?:dang ky|hoi nghi).{0,40}ket qua/.test(normalized));
     const isConferenceLargestExpectedQuestion = mentionsConference &&
         /(?:dong nhat|nhieu nhat|cao nhat|lon nhat)/.test(normalized) &&
         /(?:so nguoi|quy mo|tham du|du kien|nguoi du)/.test(normalized);
@@ -149,8 +151,8 @@ function classifyQuestion(question) {
         (mentionsConference || isWebsiteReportQuestion);
     const isConferenceRegistrationHelp = mentionsConference && ["huong dan dang ky", "cach dang ky", "dang ky hoi nghi tai", "tao yeu cau dang ky"].some(marker => normalized.includes(marker));
     const conferenceAnalysisActions = ["phan tich", "so sanh", "danh gia hieu qua", "danh gia muc do", "xu huong", "du bao nhu cau", "nhieu nhat", "it nhat", "cao nhat", "thap nhat", "noi bat", "thuong xuyen", "tan suat"].some(marker => normalized.includes(marker));
-    const isConferenceAnalysisQuestion = !isExternalDataQuestion && !isConferenceAttendanceQuestion && (isOrganizationCompletionRankingQuestion || isConferenceOrganizationSummaryQuestion || isConferenceLargestExpectedQuestion || isConferenceTopicFrequencyQuestion || (mentionsConference && conferenceAnalysisActions) || (isWebsiteReportQuestion && !isTaskQuery && !isSurveyQuestion && conferenceAnalysisActions));
-    const isConferenceDataQuestion = !isExternalDataQuestion && !isConferenceRegistrationHelp && (isConferenceAttendanceQuestion || isConferenceHistoryQuestion || isConferenceReviewQuestion || isConferenceAnalysisQuestion || (mentionsConference && (CONFERENCE_LOOKUP_MARKERS.some(marker => normalized.includes(marker)) ||
+    const isConferenceAnalysisQuestion = !isExternalDataQuestion && !isConferenceAttendanceQuestion && (isOrganizationCompletionRankingQuestion || (isConferenceOrganizationSummaryQuestion && !isConferenceOrganizationStatusLookup) || isConferenceLargestExpectedQuestion || isConferenceTopicFrequencyQuestion || (mentionsConference && conferenceAnalysisActions) || (isWebsiteReportQuestion && !isTaskQuery && !isSurveyQuestion && conferenceAnalysisActions));
+    const isConferenceDataQuestion = !isExternalDataQuestion && !isConferenceRegistrationHelp && (isConferenceAttendanceQuestion || isConferenceHistoryQuestion || isConferenceReviewQuestion || isConferenceAnalysisQuestion || isConferenceOrganizationStatusLookup || (mentionsConference && (CONFERENCE_LOOKUP_MARKERS.some(marker => normalized.includes(marker)) ||
         /hoi nghi.{0,45}(tim|tra cuu|bao nhieu|ngay|thang|nam|dia diem|dia ban|trang thai|phe duyet|hoan thanh|don vi|chu de|ma so|to chuc|o dau)/.test(normalized))) || mentionsConferenceCode);
     // Resolve overlapping keyword matches into one primary intent before retrieval.
     // This keeps a question mentioning both "nhiệm vụ" and "hội nghị" on its actual task.

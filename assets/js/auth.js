@@ -261,9 +261,23 @@
             if (!document.getElementById("tgplAssistantScript")) {
                 const assistantScript = document.createElement("script");
                 assistantScript.id = "tgplAssistantScript";
-                assistantScript.src = "assets/js/topic-assistant.js?v=20261026-reschedule-plan-intent-1";
+                assistantScript.src = "assets/js/topic-assistant.js?v=20261028-requested-date-staffing-review-1";
                 assistantScript.async = true;
+                assistantScript.addEventListener("load", () => {
+                    if (document.getElementById("tgplChatTestLibraryScript") || document.querySelector('script[src*="chat-test-library.js"]')) return;
+                    const libraryScript = document.createElement("script");
+                    libraryScript.id = "tgplChatTestLibraryScript";
+                    libraryScript.src = "assets/js/chat-test-library.js?v=20261028-floating-question-library-1";
+                    libraryScript.async = true;
+                    document.body.appendChild(libraryScript);
+                }, { once: true });
                 document.body.appendChild(assistantScript);
+            } else if (!document.getElementById("tgplChatTestLibraryScript") && !document.querySelector('script[src*="chat-test-library.js"]')) {
+                const libraryScript = document.createElement("script");
+                libraryScript.id = "tgplChatTestLibraryScript";
+                libraryScript.src = "assets/js/chat-test-library.js?v=20261028-floating-question-library-1";
+                libraryScript.async = true;
+                document.body.appendChild(libraryScript);
             }
             addAccountControls(user);
             loadDeadlineReminders(user);

@@ -115,7 +115,11 @@ function resolveConversationContext(question, history, currentClassification, cl
         (explicitReference && /\b(?:o dau|dia diem|dien ra|ngay gio|thoi gian|bao cao vien|trang thai)\b/.test(currentText));
     let conferenceReferenceCode = null;
     let conferenceReferenceAmbiguous = false;
-    if (usesContext && explicitConferenceReference && previous && relatedConferenceFamilies.has(previousFamily)) {
+    // An explicit code in the current turn replaces any earlier conference
+    // anchor. Never blend a dashboard template's old code into a user's edited
+    // question; subsequent follow-ups will anchor to this new turn in history.
+    const currentTurnConferenceCodes = conferenceCodeFromText(question);
+    if (usesContext && explicitConferenceReference && currentTurnConferenceCodes.length === 0 && previous && relatedConferenceFamilies.has(previousFamily)) {
         const codeAnchor = [...users].reverse().find(item => {
             if (item.index >= history.length) return false;
             const codes = conferenceCodeFromText(item.content);

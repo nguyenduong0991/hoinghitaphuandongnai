@@ -6,14 +6,12 @@ const pool = require("./config/database");
 const { requireRole, hashPassword, verifyPassword, checkConferenceAccess } = require("./auth");
 const { classifyQuestion } = require("./services/rag.service");
 const { normalizeConversationHistory, resolveConversationContext, buildConversationMemory } = require("./services/conversation-memory");
-const { LIMITS: PLANNING_LIMITS, SHORTAGE_POLICY: PLANNING_SHORTAGE_POLICY, rankAvailable: rankWithinLimits, localDateParts: planningDateParts, isFullyStaffed: isPlanningFullyStaffed, staffingShortages: getPlanningShortages, overlapsTimeInterval, isConferenceMonthAvailable, findApprovedScheduleConflicts, findNearestFeasibleOptions } = require("./services/planning-capacity");
-const { getActivePlanReservations, reservePlanOptions, buildPlanReservationConstraints } = require("./services/plan-reservations");
+const { LIMITS: PLANNING_LIMITS, SHORTAGE_POLICY: PLANNING_SHORTAGE_POLICY, rankAvailable: rankWithinLimits, personCapacity: getPersonCapacity, localDateParts: planningDateParts, matchExplicitPlanningDate, isFullyStaffed: isPlanningFullyStaffed, staffingShortages: getPlanningShortages, overlapsTimeInterval, hasConferenceScheduleConflict, isConferenceMonthAvailable, canKeepRequestedSchedule, findApprovedScheduleConflicts, findNearestFeasibleOptions, prioritizeRequestedDateOption, selectNearestDateOptions } = require("./services/planning-capacity");
 const upload = require("./upload");
 const router = express.Router();
 const { AI_ROLE_POLICIES } = require("./services/ai-role-policy");
 const statuses = new Set(["PENDING", "APPROVED", "COMPLETED", "REJECTED", "CANCELLED", "RESCHEDULED"]);
 let aiSuggestionInProgress = false;
-const activeConferencePlanReservations = new Map();
 router.post("/account/change-password", async (req, res) => {
     const currentPassword = String(req.body?.current_password || "");
     const newPassword = String(req.body?.new_password || "");
@@ -140,7 +138,10 @@ router.post("/ai/conference-plan-proposal", requireRole("ADMIN", "COMMUNE", "TAS
             user.role === "ADMIN" ? pool.query(`SELECT u.id,u.full_name,o.name AS organization_name
                 FROM users u LEFT JOIN organizations o ON o.id=u.organization_id
                 WHERE u.role='SPEAKER' AND u.is_active=TRUE ORDER BY u.full_name LIMIT 30`) : Promise.resolve({ rows: [] }),
-            pool.query(`SELECT (COALESCE(proposed_start_time,start_time) AT TIME ZONE 'Asia/Ho_Chi_Minh')::date::text AS start_date,
+            pool.query(`SELECT organization_id::text AS organization_id,status,
+                    COALESCE(proposed_start_time,start_time) AS start_time,
+                    COALESCE(proposed_end_time,end_time,proposed_start_time,start_time) AS end_time,
+                    (COALESCE(proposed_start_time,start_time) AT TIME ZONE 'Asia/Ho_Chi_Minh')::date::text AS start_date,
                     (COALESCE(proposed_end_time,end_time,proposed_start_time,start_time) AT TIME ZONE 'Asia/Ho_Chi_Minh')::date::text AS end_date
                 FROM conferences WHERE status IN ('PENDING','APPROVED','RESCHEDULED')
                   AND COALESCE(proposed_end_time,end_time,proposed_start_time,start_time)>=NOW()`),
@@ -181,6 +182,46 @@ router.post("/ai/conference-plan-proposal", requireRole("ADMIN", "COMMUNE", "TAS
             .filter(item => item.alias.length >= 5 && normalizedRequest.includes(item.alias))
             .sort((left, right) => right.alias.length - left.alias.length)[0] || null;
         const requestedPlaceMention = planningContext.match(/\b(?:xã|phường)\s+(?!(?:tôi|mình|bạn|đó|này|chúng tôi)\b)[^,.;\r\n]{2,60}/iu)?.[0]?.trim() || "";
+        const areaSurveySignals = surveyResult.rows
+            .filter(row => normalizePlannerText(row.category).includes("dia ban") && String(row.value || "").trim())
+            .sort((left, right) => Number(right.count || 0) - Number(left.count || 0));
+        const areaAlias = value => normalizePlannerText(value).replace(/^(?:ubnd|uy ban nhan dan)\s+/, "");
+        const organizationAreaScores = new Map();
+        for (const signal of areaSurveySignals) {
+            const area = areaAlias(signal.value);
+            if (area.length < 5) continue;
+            const match = organizations.find(item => {
+                const alias = areaAlias(item.name);
+                return area === alias || area.endsWith(` ${alias}`) || alias.endsWith(` ${area}`);
+            });
+            if (match) organizationAreaScores.set(match.id, (organizationAreaScores.get(match.id) || 0) + Number(signal.count || 0));
+        }
+        const historyOrganizationCounts = new Map();
+        for (const row of historyResult.rows) {
+            const match = organizations.find(item => normalizePlannerText(item.name) === normalizePlannerText(row.organization_name));
+            if (match) historyOrganizationCounts.set(match.id, (historyOrganizationCounts.get(match.id) || 0) + 1);
+        }
+        const organizationsByCount = scores => organizations
+            .map(item => ({ item, count: Number(scores.get(item.id) || 0) }))
+            .filter(entry => entry.count > 0)
+            .sort((left, right) => right.count - left.count || left.item.name.localeCompare(right.item.name, "vi"));
+        const areaOrganizationRanking = organizationsByCount(organizationAreaScores);
+        const historyOrganizationRanking = organizationsByCount(historyOrganizationCounts);
+        const areaRecommendedOrganization = areaOrganizationRanking[0]?.item || null;
+        const historyRecommendedOrganization = historyOrganizationRanking[0]?.item || null;
+        const tiedSurveyAreas = areaOrganizationRanking.length
+            ? areaOrganizationRanking.filter(entry => entry.count === areaOrganizationRanking[0].count).map(entry => entry.item.name)
+            : areaSurveySignals.filter(item => Number(item.count || 0) === Number(areaSurveySignals[0]?.count || 0))
+                .map(item => String(item.value || "").trim()).filter(Boolean);
+        const ownOrganization = user.role === "COMMUNE"
+            ? organizations.find(item => item.id === String(user.organization_id || "")) || null : null;
+        const asksAreaRecommendation = /(?:de xuat|goi y|chon|uu tien).{0,60}(?:dia ban|khu vuc|xa|phuong)/.test(normalizedRequest);
+        const planningOrganization = requestedOrganization || ownOrganization
+            || (asksAreaRecommendation ? areaRecommendedOrganization || (!areaSurveySignals.length ? historyRecommendedOrganization : null) : null);
+        const recommendedAreaLabel = requestedOrganization?.name || ownOrganization?.name
+            || (asksAreaRecommendation && tiedSurveyAreas.length
+                ? tiedSurveyAreas.slice(0, 3).join(", ")
+                : asksAreaRecommendation && historyRecommendedOrganization?.name) || "";
         const asksAttendeeScaleOnly = /(?:quy mo|so luong dai bieu|bao nhieu nguoi)/iu.test(normalizedRequest) && !/(?:phan cong|nhiem vu|bao cao vien|lap ke hoach|ke hoach)/iu.test(normalizedRequest);
         const asksPartnerCheck = /(?:don vi phoi hop|phoi hop o dia ban khac)/iu.test(normalizedRequest) && /(?:kiem tra|soan|de nghi|phoi hop)/iu.test(normalizedRequest);
         const asksScheduleOnly = /(?:ngay|buoi|khung gio|lich)/iu.test(normalizedRequest)
@@ -212,8 +253,8 @@ router.post("/ai/conference-plan-proposal", requireRole("ADMIN", "COMMUNE", "TAS
         if (asksPartnerCheck && !requestedOrganization && !requestedPlaceMention) {
             return res.json({ success: true, data: { clarification: "Vui lòng nêu tên xã/phường/đơn vị dự kiến phối hợp và mã hội nghị hoặc chủ đề. Tôi sẽ kiểm tra danh bạ hệ thống và chỉ soạn bản nháp để bạn duyệt; chưa gửi thông báo." } });
         }
-        const asksForPlanWithoutUnit = user.role !== "COMMUNE" && !requestedOrganization && !requestedPlaceMention;
-        if ((requestedPlaceMention && !requestedOrganization) || asksForPlanWithoutUnit) {
+        const asksForPlanWithoutUnit = user.role !== "COMMUNE" && !requestedOrganization && !requestedPlaceMention && !asksAreaRecommendation;
+        if ((requestedPlaceMention && !requestedOrganization && !asksAreaRecommendation) || asksForPlanWithoutUnit) {
             const placeText = requestedPlaceMention
                 ? `Tôi chưa tìm thấy “${requestedPlaceMention}” trong danh sách đơn vị của hệ thống.`
                 : "Đây là yêu cầu lập kế hoạch mới nên chưa cần mã hội nghị; vui lòng nêu xã/phường/đơn vị tổ chức.";
@@ -238,27 +279,23 @@ router.post("/ai/conference-plan-proposal", requireRole("ADMIN", "COMMUNE", "TAS
         const history = historyResult.rows.map(row => ({ code: row.code, title: row.title, status: row.status,
             start_time: row.start_time, location: row.location, expected_participants: row.expected_participants,
             organization: row.organization_name, description: String(row.description || "").slice(0, 250) }));
-        const relevantHistory = requestedOrganization
-            ? history.filter(row => normalizePlannerText(row.organization) === normalizePlannerText(requestedOrganization.name))
-            : user.role === "COMMUNE" ? history.filter(row => normalizePlannerText(row.organization) === normalizePlannerText(organizations.find(item => item.id === String(user.organization_id || ""))?.name || "")) : [];
+        const relevantHistory = planningOrganization
+            ? history.filter(row => normalizePlannerText(row.organization) === normalizePlannerText(planningOrganization.name)) : [];
         const explicitlyRequestedCount = Number(planningContext.match(/\b(\d{1,4})\s*(?:người|cán bộ|đại biểu)(?=\s|$|[,.;])/i)?.[1]) || 0;
         const surveySignals = surveyResult.rows.map(row => ({ category: row.category, value: String(row.value || "").slice(0, 180), count: Number(row.count || 0) }));
-        const occupied = new Set();
         const activeMonthlyCounts = new Map();
         const MONTHLY_CONFERENCE_CAP = 15;
         for (const row of blockedResult.rows) {
             const startMonth = String(row.start_date || '').slice(0, 7);
             if (startMonth) activeMonthlyCounts.set(startMonth, (activeMonthlyCounts.get(startMonth) || 0) + 1);
-            const start = new Date(`${row.start_date}T00:00:00Z`), end = new Date(`${row.end_date}T00:00:00Z`);
-            for (let stamp = start.getTime(); stamp <= end.getTime(); stamp += 86400000) occupied.add(new Date(stamp).toISOString().slice(0, 10));
         }
-        const dayKeyFor = date => date.toLocaleDateString("sv-SE", { timeZone: "Asia/Ho_Chi_Minh" });
+        const dayKeyFor = date => new Date(date).toLocaleDateString("sv-SE", { timeZone: "Asia/Ho_Chi_Minh" });
         const todayKey = dayKeyFor(new Date());
         const tomorrow = new Date(`${todayKey}T00:00:00Z`); tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
         const minimumDateKey = tomorrow.toISOString().slice(0, 10);
         // Keep proposed dates inside an explicitly requested month/quarter/year/day.
         let requestedWindow = null;
-        const exactDateMatch = normalizedRequest.match(/\bngay\s*(\d{1,2})[/-](\d{1,2})(?:[/-](\d{4}))?\b/);
+        const exactDateMatch = matchExplicitPlanningDate(request);
         const monthMatch = normalizedRequest.match(/\bthang\s*(0?[1-9]|1[0-2])(?:(?:\s*(?:nam\s*)?|[/-])(\d{4}))?\b/);
         const quarterMatch = normalizedRequest.match(/\bquy\s*(i{1,3}|iv|[1-4])(?:(?:\s*(?:nam\s*)?|[/-])(\d{4}))\b/);
         const yearMatch = normalizedRequest.match(/\bnam\s*(20\d{2})\b/);
@@ -283,6 +320,8 @@ router.post("/ai/conference-plan-proposal", requireRole("ADMIN", "COMMUNE", "TAS
             const year = Number(yearMatch[1]);
             requestedWindow = { start: `${year}-01-01`, end: `${year}-12-31`, label: `năm ${year}` };
         }
+        const requestedDateKey = exactDateMatch && requestedWindow?.start === requestedWindow?.end && requestedWindow.start >= minimumDateKey
+            ? requestedWindow.start : null;
         const windowStart = requestedWindow && requestedWindow.start > minimumDateKey ? requestedWindow.start : minimumDateKey;
         const windowEnd = requestedWindow?.end || null;
         const slots = [];
@@ -293,9 +332,10 @@ router.post("/ai/conference-plan-proposal", requireRole("ADMIN", "COMMUNE", "TAS
                 const key = date.toISOString().slice(0, 10);
                 if (endKey && key > endKey) break;
                 const weekday = new Date(`${key}T12:00:00+07:00`).getDay();
-                if ([0, 6].includes(weekday) || occupied.has(key) || !isConferenceMonthAvailable(`${key}T12:00:00+07:00`, activeMonthlyCounts, MONTHLY_CONFERENCE_CAP)) continue;
+                if ([0, 6].includes(weekday) || !isConferenceMonthAvailable(`${key}T12:00:00+07:00`, activeMonthlyCounts, MONTHLY_CONFERENCE_CAP)) continue;
                 for (const hour of [8, 13]) {
                     const start = new Date(`${key}T${String(hour).padStart(2, "0")}:30:00+07:00`), end = new Date(start.getTime() + 3 * 3600000);
+                    if (hasConferenceScheduleConflict(start, end, blockedResult.rows)) continue;
                     slots.push({ id: `S${slots.length + 1}`, start_time: start.toISOString(), end_time: end.toISOString(), label: `${start.toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })} ${start.toLocaleTimeString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit" })}–${end.toLocaleTimeString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit" })}` });
                     if (slots.length >= 360) break;
                 }
@@ -346,11 +386,17 @@ router.post("/ai/conference-plan-proposal", requireRole("ADMIN", "COMMUNE", "TAS
             };
         };
         let genericStaffingShifted = false;
+        let nearestRequestedDateAlternative = null;
         if (user.role === "ADMIN") {
             const earliestCandidateSlotId = slots[0]?.id || "";
             let search = findNearestFeasibleOptions(slots, genericStaffingPlanAt, PLANNING_LIMITS, 10);
             let checkedSlots = search.checked.map(({ option, staffing }) => ({ slot: option, staffing }));
             let feasibleSlots = search.feasible.map(({ option, staffing }) => ({ slot: option, staffing }));
+            const requestedDateCandidate = requestedDateKey
+                ? feasibleSlots.find(item => planningDateParts(item.slot.start_time)?.dayKey === requestedDateKey)
+                    || checkedSlots.find(item => planningDateParts(item.slot.start_time)?.dayKey === requestedDateKey)
+                    || null
+                : null;
             if (!feasibleSlots.length && requestedWindow) {
                 // Free dates inside a requested period can still lack qualified staff.
                 // Search the next period before reporting a shortage.
@@ -365,6 +411,12 @@ router.post("/ai/conference-plan-proposal", requireRole("ADMIN", "COMMUNE", "TAS
                 feasibleSlots = nextSearch.feasible.map(({ option, staffing }) => ({ slot: option, staffing }));
                 movedBeyondRequestedWindow = feasibleSlots.length > 0;
             }
+            if (requestedDateCandidate) {
+                feasibleSlots = prioritizeRequestedDateOption(feasibleSlots, requestedDateKey, requestedDateCandidate);
+                nearestRequestedDateAlternative = feasibleSlots.find(item =>
+                    planningDateParts(item.slot.start_time)?.dayKey !== requestedDateKey
+                    && isPlanningFullyStaffed(item.staffing, PLANNING_LIMITS)) || null;
+            }
             if (!feasibleSlots.length) {
                 const best = checkedSlots.map(item => ({ ...item, shortage: getPlanningShortages(item.staffing, PLANNING_LIMITS) }))
                     .sort((a, b) => a.shortage.staff + a.shortage.speakers - b.shortage.staff - b.shortage.speakers)[0];
@@ -377,7 +429,10 @@ router.post("/ai/conference-plan-proposal", requireRole("ADMIN", "COMMUNE", "TAS
                     staffing_resolution: { status: "STAFFING_SHORTAGE", shortage, checked_days: 180, best_candidate_slot: best?.slot?.label || null, available_staff_next_three_days: genericAvailability, admin_options: ["Dời lịch sang khung giờ khác", "Bổ sung/cử thêm nhân sự đủ điều kiện", "Chỉ đổi cơ cấu sau khi admin xác nhận nghiệp vụ"], requires_admin_choice: true, saved: false },
                     available_staff_next_three_days: genericAvailability, no_changes_saved: true, no_notifications_sent: true } });
             }
-            genericStaffingShifted = Boolean(movedBeyondRequestedWindow || feasibleSlots[0].slot.id !== earliestCandidateSlotId);
+            const selectedDateKey = planningDateParts(feasibleSlots[0].slot.start_time)?.dayKey || "";
+            genericStaffingShifted = selectedDateKey === requestedDateKey
+                ? false
+                : Boolean(movedBeyondRequestedWindow || feasibleSlots[0].slot.id !== earliestCandidateSlotId);
             slots.splice(0, slots.length, ...feasibleSlots.map((item, index) => ({ ...item.slot, id: `S${index + 1}` })));
         }
         const orgHistoryLocations = [...new Set(relevantHistory.map(row => row.location).filter(Boolean))].slice(0, 15);
@@ -414,8 +469,8 @@ router.post("/ai/conference-plan-proposal", requireRole("ADMIN", "COMMUNE", "TAS
         const model = process.env.OLLAMA_ANALYSIS_MODEL || process.env.OLLAMA_MODEL || "qwen3:4b-instruct";
         const fallback = {
             title: String(basePlanningRequest || request).slice(0, 100),
-            organization_id: requestedOrganization?.id || (user.role === "COMMUNE" ? String(user.organization_id || "") : ""),
-            organization_name: requestedOrganization?.name || (user.role === "COMMUNE" ? evidence.own_organization : ""),
+            organization_id: planningOrganization?.id || (user.role === "COMMUNE" ? String(user.organization_id || "") : ""),
+            organization_name: planningOrganization?.name || (user.role === "COMMUNE" ? evidence.own_organization : ""),
             location: orgHistoryLocations[0] || "Cần đơn vị xác nhận địa điểm phù hợp",
             time_slot_id: slots[0]?.id || "",
             expected_attendees: explicitlyRequestedCount || (relevantHistory.length ? Math.round(relevantHistory.reduce((sum, row) => sum + Number(row.expected_participants || 0), 0) / relevantHistory.length) : 0),
@@ -424,7 +479,7 @@ router.post("/ai/conference-plan-proposal", requireRole("ADMIN", "COMMUNE", "TAS
             documents: ["Chương trình/kế hoạch hội nghị", "Tài liệu pháp luật chính thức còn hiệu lực", "Tài liệu hỏi đáp và tình huống thực hành", "Danh sách đại biểu, phiếu điểm danh và phiếu đánh giá"],
             tasks: ["Xác nhận nhu cầu, đối tượng và số lượng đại biểu", "Chuẩn bị hội trường, thiết bị và tài liệu", "Chuẩn bị chuyên đề và câu hỏi tình huống", "Điểm danh, tổng hợp đánh giá và báo cáo kết quả"].map(title => ({ title, description: "Bản nháp để người dùng rà soát; chưa giao nhiệm vụ." })),
             speakers: [],
-            suggested_units: requestedOrganization ? [requestedOrganization] : user.role === "COMMUNE" ? organizations.filter(item => item.id === String(user.organization_id)) : [],
+            suggested_units: planningOrganization ? [planningOrganization] : [],
             notification_drafts: [],
             requires_admin_review: user.role !== "ADMIN"
         };
@@ -459,8 +514,8 @@ router.post("/ai/conference-plan-proposal", requireRole("ADMIN", "COMMUNE", "TAS
         const allowedOrganizationIds = new Set((user.role === "COMMUNE"
             ? organizations.filter(item => item.id === String(user.organization_id || ""))
             : organizations).map(item => item.id));
-        proposal.organization_id = requestedOrganization && allowedOrganizationIds.has(requestedOrganization.id)
-            ? requestedOrganization.id
+        proposal.organization_id = planningOrganization && allowedOrganizationIds.has(planningOrganization.id)
+            ? planningOrganization.id
             : allowedOrganizationIds.has(String(proposal.organization_id)) ? String(proposal.organization_id) : fallback.organization_id;
         proposal.organization_name = proposal.organization_id
             ? organizationById.get(proposal.organization_id)?.name || fallback.organization_name
@@ -509,6 +564,12 @@ router.post("/ai/conference-plan-proposal", requireRole("ADMIN", "COMMUNE", "TAS
         } else if (!explicitlyRequestedCount && !relevantHistory.length) {
             proposal.rationale = "Chưa có dữ liệu lịch sử phù hợp để ước lượng quy mô; cần đơn vị xác nhận số người dự kiến.";
         }
+        if (asksAreaRecommendation) {
+            const areaEvidenceNote = recommendedAreaLabel
+                ? ` Địa bàn gợi ý: ${recommendedAreaLabel}, dựa trên tần suất phiếu khảo sát/hồ sơ trong phạm vi được phép; đây chỉ là tín hiệu tham khảo, admin cần xác nhận đơn vị và nhu cầu thực tế.`
+                : " Chưa có dữ liệu khảo sát/hồ sơ đủ căn cứ để xếp hạng địa bàn; cần admin chọn địa bàn trước khi chốt.";
+            proposal.rationale = `${proposal.rationale}${areaEvidenceNote}`.slice(0, 1000);
+        }
         if (ollamaPlanningSummary) proposal.rationale = `${proposal.rationale} Tóm lược: ${ollamaPlanningSummary}`.slice(0, 1000);
         proposal.documents = Array.isArray(proposal.documents) ? proposal.documents.map(item => String(item).trim().slice(0, 250)).filter(Boolean).slice(0, 8) : fallback.documents;
         const staffIds = new Set(staffResult.rows.map(row => String(row.id)));
@@ -527,17 +588,30 @@ router.post("/ai/conference-plan-proposal", requireRole("ADMIN", "COMMUNE", "TAS
             speakers: { primary: null, backup: null, primary_shortfall: 1, backup_available: false, monthly_limit: PLANNING_LIMITS.speaker.monthly, weekly_limit: PLANNING_LIMITS.speaker.weekly }
         };
         const genericStaffingComplete = user.role !== "ADMIN" || isPlanningFullyStaffed(proposal.staffing_plan, PLANNING_LIMITS);
+        const requestedDatePrioritized = user.role === "ADMIN" && Boolean(requestedDateKey)
+            && planningDateParts(chosenSlot?.start_time)?.dayKey === requestedDateKey;
+        const requestedDateNeedsStaffingReview = requestedDatePrioritized && !genericStaffingComplete;
+        const requestedDateAlternativeText = nearestRequestedDateAlternative
+            ? ` Ngày đủ cơ cấu gần nhất tiếp theo: ${nearestRequestedDateAlternative.slot.label}.`
+            : " Chưa tìm thấy ngày đủ cơ cấu gần nhất trong khoảng rà soát.";
         const genericStaffingResolution = user.role !== "ADMIN"
             ? { status: "ADMIN_ASSIGNMENT_REQUIRED", saved: false }
             : genericStaffingComplete
             ? { status: genericStaffingShifted ? "ALTERNATIVE_DATE_REQUIRED" : "REQUESTED_DATE_FEASIBLE", shortage: { staff: 0, speakers: 0 }, saved: false,
                 note: genericStaffingShifted ? "Khung thời gian sớm hơn không đủ người theo hạn mức; các khung hiển thị đã được kiểm tra đủ cơ cấu." : "Khung hiển thị đã được kiểm tra đủ cơ cấu nhân sự." }
-            : { status: "STAFFING_SHORTAGE", shortage: getPlanningShortages(proposal.staffing_plan, PLANNING_LIMITS), requires_admin_choice: true, saved: false,
-                admin_options: ["Chọn khung thời gian khác sau khi rà soát lịch", "Bổ sung/cử thêm cán bộ hoặc báo cáo viên đủ điều kiện", "Chỉ thay đổi cơ cấu khi admin xác nhận nghiệp vụ cho phép"] };
-        if (user.role === "ADMIN" && !genericStaffingComplete) {
-            // Do not present an incomplete roster as a ready-to-use assignment draft.
-            proposal.tasks = [];
-            proposal.speakers = [];
+            : { status: requestedDateNeedsStaffingReview ? "REQUESTED_DATE_STAFFING_REVIEW" : "STAFFING_SHORTAGE",
+                shortage: getPlanningShortages(proposal.staffing_plan, PLANNING_LIMITS), requires_admin_choice: true, saved: false,
+                note: requestedDateNeedsStaffingReview
+                    ? `Ngày yêu cầu không bị trùng khung giờ với hội nghị đang ghi nhận nên được giữ làm phương án ưu tiên. Danh sách dưới đây chỉ là gợi ý theo tải công việc hiện có; admin quyết định có phân công hay chọn phương án khác.${requestedDateAlternativeText}`
+                    : "Chưa đủ cơ cấu để xác nhận phân công; xem tải công việc và lựa chọn phương án phù hợp.",
+                nearest_feasible_alternative: requestedDateNeedsStaffingReview && nearestRequestedDateAlternative
+                    ? { start_time: nearestRequestedDateAlternative.slot.start_time, end_time: nearestRequestedDateAlternative.slot.end_time, label: nearestRequestedDateAlternative.slot.label }
+                    : null,
+                admin_options: requestedDateNeedsStaffingReview
+                    ? ["Giữ ngày yêu cầu và admin quyết định nhân sự theo tải công việc hiển thị", "Chọn một ngày thay thế đủ cơ cấu", "Bổ sung nhân sự đủ điều kiện"]
+                    : ["Chọn khung thời gian khác sau khi rà soát lịch", "Bổ sung/cử thêm cán bộ hoặc báo cáo viên đủ điều kiện", "Chỉ thay đổi cơ cấu khi admin xác nhận nghiệp vụ cho phép"] };
+        if (requestedDateNeedsStaffingReview) {
+            proposal.rationale = `Ưu tiên ngày dự kiến ${requestedDateKey}; khung giờ này không chồng lấn hội nghị đang ghi nhận. Nhân sự được gợi ý theo tải hiện tại, còn thiếu ${genericStaffingResolution.shortage.staff} vị trí cán bộ và ${genericStaffingResolution.shortage.speakers} vị trí báo cáo viên; admin quyết định trước khi phân công. ${proposal.rationale}`.slice(0, 1000);
         }
         const planCreatedAt = Date.now();
         const suggestedDueAt = (index, count) => chosenSlot
@@ -561,7 +635,8 @@ router.post("/ai/conference-plan-proposal", requireRole("ADMIN", "COMMUNE", "TAS
         }) : [];
         if (user.role === "ADMIN" && !genericStaffingComplete) proposal.speakers = [];
         const validatedUnits = Array.isArray(proposal.suggested_units) ? proposal.suggested_units.filter(item => allowedOrganizationIds.has(String(item.id))).slice(0, 10).map(item => organizationById.get(String(item.id))) : [];
-        proposal.suggested_units = requestedOrganization ? [requestedOrganization] : user.role === "COMMUNE" ? organizations.filter(item => item.id === String(user.organization_id)) : [];
+        proposal.suggested_units = planningOrganization && allowedOrganizationIds.has(planningOrganization.id)
+            ? [organizationById.get(planningOrganization.id)] : [];
         const validatedNotices = Array.isArray(proposal.notification_drafts) ? proposal.notification_drafts.filter(item => allowedOrganizationIds.has(String(item.organization_id))).slice(0, 10).map(item => ({ organization_id: String(item.organization_id), message: String(item.message || "").trim().slice(0, 700) })).filter(item => item.message.length >= 10) : [];
         proposal.notification_drafts = validatedNotices;
         proposal.requires_admin_review = user.role !== "ADMIN";
@@ -775,9 +850,9 @@ router.post("/ai/conferences/:id/plan", requireRole("ADMIN"), async (req, res) =
 
         const [staffResult, speakerResult, registrationResult, publicResult, publicSituationResult, approvedResult, taskLoadResult, taskQuotaResult, speakerQuotaResult, nearTaskDatesResult, nearSpeakerDatesResult] = await Promise.all([
             pool.query(`SELECT u.id,u.username,u.full_name,o.name AS organization_name FROM users u LEFT JOIN organizations o ON o.id=u.organization_id
-                WHERE u.role='TASK_ASSIGNEE' AND u.is_active=TRUE ORDER BY u.full_name LIMIT 100`),
+                WHERE u.role='TASK_ASSIGNEE' AND u.is_active=TRUE ORDER BY u.full_name`),
             pool.query(`SELECT u.id,u.username,u.full_name,o.name AS organization_name FROM users u LEFT JOIN organizations o ON o.id=u.organization_id
-                WHERE u.role='SPEAKER' AND u.is_active=TRUE ORDER BY u.full_name LIMIT 100`),
+                WHERE u.role='SPEAKER' AND u.is_active=TRUE ORDER BY u.full_name`),
             pool.query(`SELECT COALESCE(SUM(expected_count),0)::int AS count,COUNT(*)::int AS organizations
                 FROM conference_attendance_registrations WHERE conference_id=$1`, [conferenceId]),
             pool.query(`SELECT COUNT(*)::int AS count FROM public_attendance_registrations WHERE conference_id=$1`, [conferenceId]),
@@ -785,10 +860,10 @@ router.post("/ai/conferences/:id/plan", requireRole("ADMIN"), async (req, res) =
                 FROM public_attendance_registrations WHERE conference_id=$1
                   AND NULLIF(BTRIM(consultation_situation),'') IS NOT NULL
                 ORDER BY created_at DESC LIMIT 30`, [conferenceId]),
-            pool.query(`SELECT c.code,c.title,c.organization_id,c.status,o.name AS organization_name,
-                    COALESCE(proposed_start_time,start_time) AS occupied_start,
-                    COALESCE(proposed_end_time,end_time,proposed_start_time,start_time) AS occupied_end,
-                    (COALESCE(proposed_start_time,start_time) AT TIME ZONE 'Asia/Ho_Chi_Minh')::date::text AS start_date
+            pool.query(`SELECT c.code,c.title,c.organization_id,c.status,c.reschedule_response,o.name AS organization_name,
+                    CASE WHEN c.status='RESCHEDULED' AND c.reschedule_response IN ('PENDING','ACCEPTED') THEN c.proposed_start_time ELSE c.start_time END AS occupied_start,
+                    CASE WHEN c.status='RESCHEDULED' AND c.reschedule_response IN ('PENDING','ACCEPTED') THEN COALESCE(c.proposed_end_time,c.end_time,c.proposed_start_time,c.start_time) ELSE COALESCE(c.end_time,c.start_time) END AS occupied_end,
+                    ((CASE WHEN c.status='RESCHEDULED' AND c.reschedule_response IN ('PENDING','ACCEPTED') THEN c.proposed_start_time ELSE c.start_time END) AT TIME ZONE 'Asia/Ho_Chi_Minh')::date::text AS start_date
                 FROM conferences c LEFT JOIN organizations o ON o.id=c.organization_id
                 WHERE c.status IN ('PENDING','APPROVED','RESCHEDULED') AND c.id<>$1
                   AND COALESCE(proposed_start_time,start_time) IS NOT NULL
@@ -796,45 +871,50 @@ router.post("/ai/conferences/:id/plan", requireRole("ADMIN"), async (req, res) =
             pool.query(`SELECT assignee_user_id,COUNT(*)::int AS active_tasks FROM conference_task_assignments
                 WHERE status IN ('ASSIGNED','IN_PROGRESS') GROUP BY assignee_user_id`),
             pool.query(`SELECT a.assignee_user_id::text AS user_id,
-                    to_char(COALESCE(c.proposed_start_time,c.start_time) AT TIME ZONE 'Asia/Ho_Chi_Minh','YYYY-MM') AS month_key,
-                    to_char(date_trunc('week',COALESCE(c.proposed_start_time,c.start_time) AT TIME ZONE 'Asia/Ho_Chi_Minh'),'YYYY-MM-DD') AS week_key,
+                    to_char((CASE WHEN c.status='RESCHEDULED' AND c.reschedule_response IN ('PENDING','ACCEPTED') THEN c.proposed_start_time ELSE c.start_time END) AT TIME ZONE 'Asia/Ho_Chi_Minh','YYYY-MM') AS month_key,
+                    to_char(date_trunc('week',(CASE WHEN c.status='RESCHEDULED' AND c.reschedule_response IN ('PENDING','ACCEPTED') THEN c.proposed_start_time ELSE c.start_time END) AT TIME ZONE 'Asia/Ho_Chi_Minh'),'YYYY-MM-DD') AS week_key,
                     COUNT(*)::int AS count
                 FROM conference_task_assignments a JOIN conferences c ON c.id=a.conference_id
-                WHERE a.assignee_user_id IS NOT NULL AND a.status<>'CANCELLED' AND COALESCE(c.proposed_start_time,c.start_time) IS NOT NULL
-                  AND c.status NOT IN ('COMPLETED','CANCELLED','REJECTED')
+                WHERE a.assignee_user_id IS NOT NULL AND a.status<>'CANCELLED'
+                  AND (CASE WHEN c.status='RESCHEDULED' AND c.reschedule_response IN ('PENDING','ACCEPTED') THEN c.proposed_start_time ELSE c.start_time END) IS NOT NULL
+                  AND c.status NOT IN ('CANCELLED','REJECTED')
                   AND c.id<>$1
                 GROUP BY a.assignee_user_id,month_key,week_key`, [conferenceId]),
             pool.query(`SELECT s.speaker_user_id::text AS user_id,
-                    to_char(COALESCE(c.proposed_start_time,c.start_time) AT TIME ZONE 'Asia/Ho_Chi_Minh','YYYY-MM') AS month_key,
-                    to_char(date_trunc('week',COALESCE(c.proposed_start_time,c.start_time) AT TIME ZONE 'Asia/Ho_Chi_Minh'),'YYYY-MM-DD') AS week_key,
+                    to_char((CASE WHEN c.status='RESCHEDULED' AND c.reschedule_response IN ('PENDING','ACCEPTED') THEN c.proposed_start_time ELSE c.start_time END) AT TIME ZONE 'Asia/Ho_Chi_Minh','YYYY-MM') AS month_key,
+                    to_char(date_trunc('week',(CASE WHEN c.status='RESCHEDULED' AND c.reschedule_response IN ('PENDING','ACCEPTED') THEN c.proposed_start_time ELSE c.start_time END) AT TIME ZONE 'Asia/Ho_Chi_Minh'),'YYYY-MM-DD') AS week_key,
                     COUNT(*)::int AS count
                 FROM conference_speakers s JOIN conferences c ON c.id=s.conference_id
-                WHERE s.speaker_user_id IS NOT NULL AND COALESCE(c.proposed_start_time,c.start_time) IS NOT NULL
-                  AND c.status NOT IN ('COMPLETED','CANCELLED','REJECTED')
+                WHERE s.speaker_user_id IS NOT NULL
+                  AND (CASE WHEN c.status='RESCHEDULED' AND c.reschedule_response IN ('PENDING','ACCEPTED') THEN c.proposed_start_time ELSE c.start_time END) IS NOT NULL
+                  AND c.status NOT IN ('CANCELLED','REJECTED')
                   AND c.id<>$1
                 GROUP BY s.speaker_user_id,month_key,week_key`, [conferenceId]),
             pool.query(`SELECT DISTINCT a.assignee_user_id::text AS user_id,
                     (COALESCE(c.proposed_start_time,c.start_time) AT TIME ZONE 'Asia/Ho_Chi_Minh')::date::text AS date_key
                 FROM conference_task_assignments a JOIN conferences c ON c.id=a.conference_id
                 WHERE a.assignee_user_id IS NOT NULL AND a.status<>'CANCELLED' AND c.id<>$1
-                  AND c.status IN ('PENDING','APPROVED','RESCHEDULED') AND COALESCE(c.proposed_start_time,c.start_time) IS NOT NULL
-                  AND (COALESCE(c.proposed_start_time,c.start_time) AT TIME ZONE 'Asia/Ho_Chi_Minh')::date >= (NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date
-                  AND (COALESCE(c.proposed_start_time,c.start_time) AT TIME ZONE 'Asia/Ho_Chi_Minh')::date < (NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date + 181`, [conferenceId]),
+                  AND c.status IN ('PENDING','APPROVED','RESCHEDULED')
+                  AND (CASE WHEN c.status='RESCHEDULED' AND c.reschedule_response IN ('PENDING','ACCEPTED') THEN c.proposed_start_time ELSE c.start_time END) IS NOT NULL
+                  AND ((CASE WHEN c.status='RESCHEDULED' AND c.reschedule_response IN ('PENDING','ACCEPTED') THEN c.proposed_start_time ELSE c.start_time END) AT TIME ZONE 'Asia/Ho_Chi_Minh')::date >= (NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date
+                  AND ((CASE WHEN c.status='RESCHEDULED' AND c.reschedule_response IN ('PENDING','ACCEPTED') THEN c.proposed_start_time ELSE c.start_time END) AT TIME ZONE 'Asia/Ho_Chi_Minh')::date < (NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date + 181`, [conferenceId]),
             pool.query(`SELECT DISTINCT s.speaker_user_id::text AS user_id,
                     (COALESCE(c.proposed_start_time,c.start_time) AT TIME ZONE 'Asia/Ho_Chi_Minh')::date::text AS date_key
                 FROM conference_speakers s JOIN conferences c ON c.id=s.conference_id
                 WHERE s.speaker_user_id IS NOT NULL AND c.id<>$1
-                  AND c.status IN ('PENDING','APPROVED','RESCHEDULED') AND COALESCE(c.proposed_start_time,c.start_time) IS NOT NULL
-                  AND (COALESCE(c.proposed_start_time,c.start_time) AT TIME ZONE 'Asia/Ho_Chi_Minh')::date >= (NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date
-                  AND (COALESCE(c.proposed_start_time,c.start_time) AT TIME ZONE 'Asia/Ho_Chi_Minh')::date < (NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date + 181`, [conferenceId])
+                  AND c.status IN ('PENDING','APPROVED','RESCHEDULED')
+                  AND (CASE WHEN c.status='RESCHEDULED' AND c.reschedule_response IN ('PENDING','ACCEPTED') THEN c.proposed_start_time ELSE c.start_time END) IS NOT NULL
+                  AND ((CASE WHEN c.status='RESCHEDULED' AND c.reschedule_response IN ('PENDING','ACCEPTED') THEN c.proposed_start_time ELSE c.start_time END) AT TIME ZONE 'Asia/Ho_Chi_Minh')::date >= (NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date
+                  AND ((CASE WHEN c.status='RESCHEDULED' AND c.reschedule_response IN ('PENDING','ACCEPTED') THEN c.proposed_start_time ELSE c.start_time END) AT TIME ZONE 'Asia/Ho_Chi_Minh')::date < (NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date + 181`, [conferenceId])
         ]);
 
         const now = new Date();
-        const activeDraftReservations = getActivePlanReservations(activeConferencePlanReservations, { now: now.getTime(), excludeKey: conferenceId });
-        const draftConstraints = buildPlanReservationConstraints(activeDraftReservations);
+        // Suggestions are not commitments. Do not let other unsaved AI drafts
+        // consume dates, monthly slots, or staff/speaker quotas for this plan.
+        const draftConstraints = { intervals: [], monthlyConferenceCounts: new Map(), taskWorkload: [], speakerWorkload: [], busyTaskDates: new Map(), busySpeakerDates: new Map() };
         const requestedStart = new Date(conference.start_time);
         const requestedEnd = conference.end_time ? new Date(conference.end_time) : requestedStart;
-        const dayKeyFor = date => date.toLocaleDateString("sv-SE", { timeZone: "Asia/Ho_Chi_Minh" });
+        const dayKeyFor = date => new Date(date).toLocaleDateString("sv-SE", { timeZone: "Asia/Ho_Chi_Minh" });
         const requestedDurationMs = requestedEnd - requestedStart;
         const sameRequestedDay = Number.isFinite(requestedStart.getTime()) && Number.isFinite(requestedEnd.getTime()) &&
             dayKeyFor(requestedStart) === dayKeyFor(requestedEnd);
@@ -847,13 +927,17 @@ router.post("/ai/conferences/:id/plan", requireRole("ADMIN"), async (req, res) =
             approvedResult.rows.map(row => ({ code: row.code, title: row.title, organization_id: row.organization_id, organization_name: row.organization_name,
                 status: row.status, start: row.occupied_start, end: row.occupied_end })));        const occupiedIntervals = [];
         const activeMonthlyCounts = new Map();
+        const sameOrganizationId = String(conference.organization_id || "");
         for (const row of approvedResult.rows) {
             const from = new Date(row.occupied_start);
             const to = new Date(row.occupied_end || row.occupied_start);
             if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime())) continue;
-            occupiedIntervals.push({ start: from, end: to < from ? from : to });
             const monthKey = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit" }).format(from);
             activeMonthlyCounts.set(monthKey, (activeMonthlyCounts.get(monthKey) || 0) + 1);
+            const scheduleConfirmed = row.status === "APPROVED" || (row.status === "RESCHEDULED" && row.reschedule_response === "ACCEPTED");
+            if (scheduleConfirmed && String(row.organization_id || "") === sameOrganizationId) {
+                occupiedIntervals.push({ start: from, end: to < from ? from : to });
+            }
         }
         occupiedIntervals.push(...draftConstraints.intervals);
         for (const [monthKey, count] of draftConstraints.monthlyConferenceCounts) activeMonthlyCounts.set(monthKey, (activeMonthlyCounts.get(monthKey) || 0) + count);
@@ -862,6 +946,9 @@ router.post("/ai/conferences/:id/plan", requireRole("ADMIN"), async (req, res) =
         const preferredKey = preferredStart && preferredStart > now
             ? dayKeyFor(preferredStart) : dayKeyFor(new Date(now.getTime() + 7 * 86400000));
         const candidateDateOptions = [];
+        const monthlyCapRejections = new Map();
+        const candidateSlotsByMonth = new Map();
+        const overlapRejections = new Map();
         const timeSlots = [{ startHour: 8, startMinute: 30 }, { startHour: 13, startMinute: 30 }];
         for (let offset = 0; offset < 180; offset++) {
             const date = new Date(`${preferredKey}T00:00:00Z`); date.setUTCDate(date.getUTCDate() + offset);
@@ -869,15 +956,22 @@ router.post("/ai/conferences/:id/plan", requireRole("ADMIN"), async (req, res) =
             const weekday = new Date(`${dayKey}T12:00:00+07:00`).getDay();
             if ([0, 6].includes(weekday)) continue;
             const monthKey = dayKey.slice(0, 7);
-            if (!isConferenceMonthAvailable(`${dayKey}T12:00:00+07:00`, activeMonthlyCounts, 15)) continue;
+            if (!isConferenceMonthAvailable(`${dayKey}T12:00:00+07:00`, activeMonthlyCounts, 15)) {
+                monthlyCapRejections.set(monthKey, (monthlyCapRejections.get(monthKey) || 0) + 1);
+                continue;
+            }
             for (const slot of timeSlots) {
                 const start = new Date(`${dayKey}T${String(slot.startHour).padStart(2, "0")}:${String(slot.startMinute).padStart(2, "0")}:00+07:00`);
                 const end = new Date(start.getTime() + durationMs);
                 // Ignore past time windows and ensure both ends stay on the free day.
-                if (start <= now || dayKeyFor(end) !== dayKey) continue;
-                if (overlapsTimeInterval(start, end, occupiedIntervals)) continue;
+                if (start <= now || (dayKey === preferredKey && start <= preferredStart) || dayKeyFor(end) !== dayKey) continue;
+                if (overlapsTimeInterval(start, end, occupiedIntervals)) {
+                    overlapRejections.set(monthKey, (overlapRejections.get(monthKey) || 0) + 1);
+                    continue;
+                }
                 candidateDateOptions.push({ id: `C${candidateDateOptions.length + 1}`, start_time: start.toISOString(), end_time: end.toISOString(),
                     label: `${start.toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })} · ${start.toLocaleTimeString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit" })}–${end.toLocaleTimeString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit" })}` });
+                candidateSlotsByMonth.set(monthKey, (candidateSlotsByMonth.get(monthKey) || 0) + 1);
             }
         }
 
@@ -899,6 +993,15 @@ router.post("/ai/conferences/:id/plan", requireRole("ADMIN"), async (req, res) =
             .filter(person => !(busyTaskDates.get(String(person.id)) || new Set()).has(dateKeyFor(date)));
         const getSpeakerCapacity = (date, preferred = []) => rankWithinLimits(speakerResult.rows, date, speakerWorkload, PLANNING_LIMITS.speaker, preferred)
             .filter(person => !(busySpeakerDates.get(String(person.id)) || new Set()).has(dateKeyFor(date)));
+        const reviewWorkload = (people, date, workload, limits, busyDates) => people.map(person => {
+            const capacity = getPersonCapacity(person, date, workload, limits);
+            const isBusy = (busyDates.get(String(person.id)) || new Set()).has(dateKeyFor(date));
+            return { id: String(person.id), full_name: person.full_name, organization_name: person.organization_name || "",
+                monthly_count: capacity.monthly_count, monthly_limit: capacity.monthly_limit,
+                weekly_count: capacity.weekly_count, weekly_limit: capacity.weekly_limit,
+                eligible: capacity.eligible && !isBusy,
+                reason: !capacity.eligible ? capacity.reason : isBusy ? "Đã có nhiệm vụ/lịch cùng ngày" : "Còn hạn mức và trống ngày" };
+        });
         const buildStaffingPlan = (date, preferredStaff = [], preferredSpeakers = []) => {
             const staffCandidates = getStaffCapacity(date, preferredStaff);
             const speakerCandidates = getSpeakerCapacity(date, preferredSpeakers);
@@ -917,12 +1020,65 @@ router.post("/ai/conferences/:id/plan", requireRole("ADMIN"), async (req, res) =
                     primary_shortfall: speakerCandidates.length ? 0 : 1,
                     backup_available: Boolean(speakerCandidates[PLANNING_LIMITS.speakerPrimary]),
                     monthly_limit: PLANNING_LIMITS.speaker.monthly, weekly_limit: PLANNING_LIMITS.speaker.weekly
+                },
+                workload_review: {
+                    task_assignees: reviewWorkload(staff, date, taskWorkload, PLANNING_LIMITS.taskAssignee, busyTaskDates),
+                    speakers: reviewWorkload(speakerResult.rows, date, speakerWorkload, PLANNING_LIMITS.speaker, busySpeakerDates)
                 }
             };
         };
+        // A date already submitted by a commune is a fixed preference. Do not
+        // silently move it because of the weekday filter, monthly planning cap,
+        // or a staffing shortfall. Only an approved same-organization conflict
+        // or a live draft reservation can displace that requested slot.
+        const requestedScheduleEnd = new Date(requestedStart.getTime() + durationMs);
+        const requestedScheduleCanStay = !forceReschedule && canKeepRequestedSchedule({
+            start: requestedStart,
+            end: requestedScheduleEnd,
+            now,
+            approvedConflicts: approvedSameLocalityConflicts,
+            draftIntervals: draftConstraints.intervals
+        });
+        const requestedDateCandidate = requestedScheduleCanStay ? (() => {
+            const staffing = buildStaffingPlan(requestedStart);
+            return {
+                option: {
+                    id: "REQUESTED",
+                    start_time: requestedStart.toISOString(),
+                    end_time: requestedScheduleEnd.toISOString(),
+                    label: `${requestedStart.toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })} · ${requestedStart.toLocaleTimeString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit" })}–${requestedScheduleEnd.toLocaleTimeString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit" })}`
+                },
+                staffing
+            };
+        })() : null;
         const dateSearch = findNearestFeasibleOptions(candidateDateOptions, buildStaffingPlan, PLANNING_LIMITS, 3);
-        const dateOptions = dateSearch.feasible.map(({ option, staffing }, index) => ({ ...option, staffing_plan: staffing, id: `D${index + 1}` }));
-        const planReservation = reservePlanOptions(activeConferencePlanReservations, conferenceId, dateOptions, { now: Date.now() });
+        const requestedDateKey = requestedDateCandidate ? dayKeyFor(requestedDateCandidate.option.start_time) : "";
+        const alternativeDateOptions = selectNearestDateOptions(dateSearch.checked, {
+            requestedDate: requestedDateCandidate ? requestedDateKey : "",
+            maxOptions: requestedDateCandidate ? 2 : 3,
+            limits: PLANNING_LIMITS
+        });
+        const prioritizedDateSearch = requestedDateCandidate
+            ? prioritizeRequestedDateOption(alternativeDateOptions, requestedDateKey, requestedDateCandidate)
+            : alternativeDateOptions;
+        const dateOptions = prioritizedDateSearch.map(({ option, staffing }, index) => {
+            const shortage = getPlanningShortages(staffing, PLANNING_LIMITS);
+            return { ...option, staffing_plan: staffing, staffing_complete: isPlanningFullyStaffed(staffing, PLANNING_LIMITS), staffing_shortage: shortage, id: `D${index + 1}` };
+        });
+        const diagnosticMonthKeys = [...new Set([
+            ...activeMonthlyCounts.keys(), ...candidateSlotsByMonth.keys(), ...monthlyCapRejections.keys(), ...overlapRejections.keys()
+        ])].filter(key => key >= preferredKey.slice(0, 7) && key <= dayKeyFor(new Date(new Date(`${preferredKey}T00:00:00Z`).getTime() + 180 * 86400000)).slice(0, 7)).sort();
+        const scheduleDiagnostics = {
+            monthly_limit: 15,
+            months: diagnosticMonthKeys.map(month => ({ month,
+                active_conferences: Number(activeMonthlyCounts.get(month) || 0),
+                remaining_capacity: Math.max(0, 15 - Number(activeMonthlyCounts.get(month) || 0)),
+                free_candidate_slots: Number(candidateSlotsByMonth.get(month) || 0),
+                weekdays_rejected_by_month_cap: Number(monthlyCapRejections.get(month) || 0),
+                slots_rejected_by_same_organization_schedule: Number(overlapRejections.get(month) || 0)
+            })),
+            returned_options: dateOptions.map(option => ({ date: dayKeyFor(option.start_time), complete_staffing: option.staffing_complete, shortage: option.staffing_shortage }))
+        };
         const bestCandidate = dateSearch.bestCandidate;
         const checkedDays = 180;
         const todayParts = planningDateParts(new Date());
@@ -947,13 +1103,14 @@ router.post("/ai/conferences/:id/plan", requireRole("ADMIN"), async (req, res) =
                 best_candidate_date: bestCandidate?.option?.label || null,
                 shortage: bestCandidate?.shortages || null,
                 available_staff_next_three_days: nextThreeDayAvailability,
-                admin_options: ["Dời hội nghị sang thời điểm khác sau khi rà soát lại nhân lực", "Bổ sung/cử thêm cán bộ hoặc báo cáo viên đủ điều kiện", "Xem xét thay đổi cơ cấu chỉ khi admin xác nhận nghiệp vụ cho phép"],
+                schedule_diagnostics: scheduleDiagnostics,
+                admin_options: ["Giữ ngày gần nhất và admin quyết định vị trí còn thiếu", "Chọn ngày gần nhất có cơ cấu đủ người", "Bổ sung/cử thêm cán bộ hoặc báo cáo viên đủ điều kiện"],
                 requires_admin_choice: true,
                 requested_reschedule: forceReschedule,
                 requires_reschedule: forceReschedule || approvedSameLocalityConflicts.length > 0,
                 saved: false
             };
-            return res.json({ success: true, data: { plan: null, alternatives: [], evidence: { conference: { code: conference.code, title: conference.title, organization: conference.organization_name, requested_start: conference.start_time, requested_end: conference.end_time, status: conference.status }, available_dates: [], approved_same_locality_conflicts: approvedSameLocalityConflicts, available_staff_next_three_days: nextThreeDayAvailability, staffing_limits: PLANNING_LIMITS }, staffing_resolution: staffingResolution, requires_admin_review: true, saved: false } });
+            return res.json({ success: true, data: { plan: null, alternatives: [], evidence: { conference: { code: conference.code, title: conference.title, organization: conference.organization_name, requested_start: conference.start_time, requested_end: conference.end_time, status: conference.status }, available_dates: [], approved_same_locality_conflicts: approvedSameLocalityConflicts, available_staff_next_three_days: nextThreeDayAvailability, staffing_limits: PLANNING_LIMITS, schedule_diagnostics: scheduleDiagnostics }, staffing_resolution: staffingResolution, requires_admin_review: true, saved: false } });
         }
         // Keep a short list in the response/prompt. Every listed option has already
         // passed the backend's full primary/backup and quota checks.
@@ -998,15 +1155,16 @@ router.post("/ai/conferences/:id/plan", requireRole("ADMIN"), async (req, res) =
             `Những tình huống thực tế hoặc vướng mắc phổ biến nào nên trao đổi tại hội nghị?`,
             `Người tham dự cần thực hiện bước nào sau hội nghị để áp dụng nội dung đã trao đổi?`
         ];
-        // Backend decisions are authoritative: dateOptions is nearest-first and each entry
-        // already passed interval overlap, quota, monthly-cap and staffing checks.
+        // Backend decisions are authoritative: dateOptions is nearest-first and each
+        // entry passed calendar and monthly-cap checks; staffing gaps are returned
+        // explicitly so a shortage never pushes the plan months farther away silently.
         const schedulesForAlternatives = dateOptions.slice(0, 3);
         const schedule = schedulesForAlternatives[0];
         const firstStaffingPlan = schedule.staffing_plan;
         const firstPrimaryStaff = firstStaffingPlan.staff.primary.slice(0, PLANNING_LIMITS.staffPrimary);
         const plan = {
             id: "P1", schedule_option_id: schedule.id,
-            schedule_reason: approvedSameLocalityConflicts.length ? `Yêu cầu bị trùng lịch với ${approvedSameLocalityConflicts.map(item => item.code).join(", ")} đã được phê duyệt tại cùng đơn vị; đề xuất chuyển sang ngày khả thi gần nhất.` : forceReschedule ? `Theo yêu cầu dời lịch, đề xuất ngày khả thi gần nhất sau lịch hiện tại: ${schedule.label}.` : "Ngày gần nhất đã vượt qua kiểm tra lịch trùng, hạn mức tháng/tuần và nhân lực.",
+            schedule_reason: approvedSameLocalityConflicts.length ? `Yêu cầu bị trùng lịch với ${approvedSameLocalityConflicts.map(item => item.code).join(", ")} đã được phê duyệt tại cùng đơn vị; đề xuất chuyển sang ngày gần nhất còn lịch.` : requestedDateCandidate ? "Ưu tiên ngày giờ đơn vị đã đăng ký vì không trùng lịch đã duyệt cùng đơn vị. Tải nhân sự được rà riêng; vị trí thiếu cần admin quyết định." : forceReschedule ? `Theo yêu cầu dời lịch, đề xuất ngày gần nhất còn lịch sau lịch hiện tại: ${schedule.label}.` : `Ngày gần nhất còn lịch: ${schedule.label}. Lịch và trần tháng đã được kiểm tra; cơ cấu nhân sự ${isPlanningFullyStaffed(firstStaffingPlan, PLANNING_LIMITS) ? "đủ theo hạn mức" : "còn thiếu, xem tải toàn bộ nhân sự bên dưới"}.`,
             expected_attendees: Math.max(Number(conference.expected_participants || 0), Number(registrationResult.rows[0]?.count || 0) + Number(publicResult.rows[0]?.count || 0)),
             attendee_basis: "Quy mô đăng ký và dự kiến hiện có; admin xác nhận trước khi chốt.",
             staffing_plan: firstStaffingPlan,
@@ -1022,8 +1180,12 @@ router.post("/ai/conferences/:id/plan", requireRole("ADMIN"), async (req, res) =
                 due_at: taskDueAt(schedule.start_time, firstPrimaryStaff.length, index)
             })),
             speaker_questions: fallbackSpeakerQuestions,
-            planning_notes: ["Phương án do backend kiểm tra theo lịch, hạn mức và nhân lực; admin duyệt trước khi lưu hoặc gửi thông báo."]
+            planning_notes: ["Ngày được chọn là ngày gần nhất còn khung giờ trong phạm vi rà soát. Tải cán bộ và báo cáo viên đã được đối chiếu trên toàn bộ tài khoản đang hoạt động; admin xác nhận trước khi lưu hoặc gửi thông báo."]
         };
+        const firstOptionShortage = getPlanningShortages(firstStaffingPlan, PLANNING_LIMITS);
+        if (firstOptionShortage.staff || firstOptionShortage.speakers) {
+            plan.planning_notes.unshift(`${requestedDateCandidate ? "Giữ ngày giờ đơn vị đăng ký" : "Ngày khả thi gần nhất"}; cơ cấu còn thiếu ${firstOptionShortage.staff} vị trí cán bộ và ${firstOptionShortage.speakers} vị trí báo cáo viên. Tải từng nhân sự được liệt kê; không tự vượt hạn mức, admin quyết định.`);
+        }
         const alternatives = schedulesForAlternatives.map((slot, alternativeIndex) => {
             const staffingPlan = slot.staffing_plan;
             const primaryStaff = staffingPlan.staff.primary.slice(0, PLANNING_LIMITS.staffPrimary);
@@ -1036,10 +1198,17 @@ router.post("/ai/conferences/:id/plan", requireRole("ADMIN"), async (req, res) =
                 ...plan.tasks[index], assignee_user_id: String(person.id), staffing_role: "PRIMARY",
                 due_at: taskDueAt(slot.start_time, primaryStaff.length, index)
             }));
+            const shortage = getPlanningShortages(staffingPlan, PLANNING_LIMITS);
+            const fullyStaffed = isPlanningFullyStaffed(staffingPlan, PLANNING_LIMITS);
+            const optionNotes = ["Tải của toàn bộ cán bộ và báo cáo viên được đối chiếu theo hạn mức tháng/tuần; admin duyệt trước khi lưu hoặc thông báo."];
+            if (!fullyStaffed) optionNotes.unshift(`Còn thiếu ${shortage.staff} vị trí cán bộ và ${shortage.speakers} vị trí báo cáo viên theo cơ cấu mục tiêu; không tự vượt hạn mức.`);
             return { id: `P${alternativeIndex + 1}`, label: `Phương án ${alternativeIndex + 1} · ${slot.label}`,
                 ...plan, staffing_plan: staffingPlan, schedule_option_id: slot.id,
-                schedule_reason: alternativeIndex === 0 ? plan.schedule_reason : `Ngày gần nhất tiếp theo vượt qua kiểm tra lịch và nhân lực: ${slot.label}.`,
-                speakers, tasks };
+                schedule_reason: requestedDateCandidate && slot.id === dateOptions[0]?.id
+                    ? plan.schedule_reason
+                    : fullyStaffed ? `Ngày gần nhất còn lịch và đủ cơ cấu nhân lực theo hạn mức: ${slot.label}.`
+                        : `Ngày gần nhất còn lịch; thiếu ${shortage.staff} vị trí cán bộ và ${shortage.speakers} vị trí báo cáo viên. Admin xem tải toàn bộ nhân sự trước khi quyết định.`,
+                planning_notes: optionNotes, speakers, tasks };
         });
         // Ollama is limited to optional wording/questions; timeout or contention never
         // delays/blocks the deterministic feasible plan returned above.
@@ -1063,16 +1232,23 @@ router.post("/ai/conferences/:id/plan", requireRole("ADMIN"), async (req, res) =
             finally { aiSuggestionInProgress = false; }
         } else modelNote = "Ollama đang bận; phương án khả thi được tạo bằng các quy tắc hệ thống.";
         if (modelNote) plan.planning_notes.push(modelNote);
+        if (modelNote) plan.planning_notes.push(modelNote);
         for (const alternative of alternatives) {
-            alternative.planning_notes = [...plan.planning_notes];
+            if (modelNote) alternative.planning_notes.push(modelNote);
             alternative.speaker_questions = [...plan.speaker_questions];
         }
         if (alternatives.length) Object.assign(plan, alternatives[0], { alternatives });
         res.json({ success: true, data: { plan, alternatives, evidence, staffing_resolution: {
-            status: forceReschedule ? "RESCHEDULE_PROPOSAL" : approvedSameLocalityConflicts.length ? "APPROVED_CONFERENCE_CONFLICT" : dateOptions.some(item => dateKeyFor(item.start_time) === preferredKey) ? "REQUESTED_DATE_FEASIBLE" : "ALTERNATIVE_DATE_REQUIRED",
+            status: requestedDateCandidate
+                ? (firstOptionShortage.staff + firstOptionShortage.speakers > 0 ? "REQUESTED_DATE_STAFFING_REVIEW" : "REQUESTED_DATE_FEASIBLE")
+                : firstOptionShortage.staff + firstOptionShortage.speakers > 0 ? "ALTERNATIVE_DATE_STAFFING_REVIEW"
+                : forceReschedule ? "RESCHEDULE_PROPOSAL" : approvedSameLocalityConflicts.length ? "APPROVED_CONFERENCE_CONFLICT" : "ALTERNATIVE_DATE_REQUIRED",
             requested_date: preferredKey, requested_reschedule: forceReschedule, approved_same_locality_conflicts: approvedSameLocalityConflicts, requires_reschedule: forceReschedule || approvedSameLocalityConflicts.length > 0, alternatives_require_admin_choice: true, saved: false,
-            admin_options: ["Dời yêu cầu sang một phương án không trùng lịch và đủ nhân sự", "Bổ sung/cử thêm nhân sự nếu muốn giữ ngày yêu cầu"]
-        }, draft_reservation: planReservation ? { expires_at: new Date(planReservation.expiresAt).toISOString(), held_options: dateOptions.length } : null, generated_by: ollamaSummaryUsed ? `system-rules+${model}-summary` : "system-rules", requires_admin_review: true, saved: false } });
+            shortage: firstOptionShortage,
+            schedule_diagnostics: scheduleDiagnostics,
+            note: requestedDateCandidate ? "Ngày đăng ký được giữ làm phương án đầu nếu không trùng lịch đã duyệt cùng đơn vị; tải của toàn bộ nhân sự được hiển thị để admin quyết định, hệ thống không tự vượt hạn mức." : "Các phương án là những ngày gần nhất còn khung lịch; phương án thiếu người vẫn được hiển thị cùng tải nhân sự để admin quyết định.",
+            admin_options: ["Giữ ngày gần nhất và admin quyết định vị trí còn thiếu", "Chọn phương án gần nhất đủ cơ cấu nhân lực", "Bổ sung/cử thêm cán bộ hoặc báo cáo viên đủ điều kiện"]
+        }, draft_reservation: null, generated_by: ollamaSummaryUsed ? `system-rules+${model}-summary` : "system-rules", requires_admin_review: true, saved: false } });
     } catch (error) {
         console.error("AI conference planning failed:", error);
         res.status(500).json({ success: false, message: "Không tạo được phương án lúc này. Vui lòng kiểm tra backend và dữ liệu hội nghị." });
@@ -1269,7 +1445,6 @@ router.patch("/my/conferences/:id/reschedule-response", requireRole("COMMUNE"), 
         await client.query(`INSERT INTO conference_status_history(conference_id,previous_status,new_status,reason,changed_by)
             VALUES($1,$2,$3,$4,$5)`, [req.params.id, current.status, nextStatus, reason, req.user.id]);
         await client.query("COMMIT");
-        activeConferencePlanReservations.delete(String(req.params.id));
         res.json({ success: true, data: result.rows[0] });
     } catch (error) {
         await client.query("ROLLBACK");
@@ -1372,7 +1547,6 @@ router.patch("/conferences/:id/status", requireRole("ADMIN"), async (req, res) =
         await client.query(`INSERT INTO conference_status_history(conference_id,previous_status,new_status,reason,changed_by)
             VALUES($1,$2,$3,$4,$5)`, [req.params.id, previous.rows[0].status, status, historyReason, actorId]);
         await client.query("COMMIT");
-        activeConferencePlanReservations.delete(String(req.params.id));
         res.json({ success: true, data: result.rows[0] });
     } catch (error) {
         await client.query("ROLLBACK");

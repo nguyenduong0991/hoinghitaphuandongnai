@@ -1,17 +1,18 @@
 (() => {
+    if (window.__TGPLChatTestLibraryInitialized) return;
+    window.__TGPLChatTestLibraryInitialized = true;
     const adminGroups = [
         {
             title: "Tra cứu hội nghị",
-            hint: "Tra theo mã, đơn vị, thời gian, địa điểm và trạng thái; kết quả tuân theo quyền tài khoản.",
+            hint: "Đây là mẫu ý định, không phải câu cố định: có thể thay mã hội nghị, đơn vị, tài khoản hoặc kỳ thời gian rồi gửi câu đã sửa. Chatbot phải tra theo dữ kiện mới nhất và quyền tài khoản, không lấy giá trị cũ trong câu mẫu thay thế.",
             items: [
                 ["HN-01", "Hội nghị HN-0012 diễn ra khi nào, ở đâu và trạng thái hiện tại là gì?"],
                 ["HN-02", "Hội nghị HN-0006 có được công khai hay không? Nếu không công khai, hãy liệt kê các đơn vị được đăng ký tham dự."],
-                ["HN-03", "Hội nghị của UBND xã Lộc Tấn đang ở trạng thái nào? Nếu có nhiều hội nghị, hãy nêu từng mã."],
-                ["HN-04", "Ai được phân công và ai là báo cáo viên của hội nghị HN-0012?"],
-                ["HN-05", "Hội nghị của UBND phường Trảng Dài đang ở trạng thái nào? Nếu có nhiều hội nghị, hãy nêu mã và trạng thái từng hội nghị."],
-                ["HN-06", "Rà soát các hội nghị dự kiến diễn ra trong tháng 11/2026, gồm cả hồ sơ chưa phê duyệt; nêu mã, đơn vị, ngày tổ chức và trạng thái."],
-                ["HN-07", "Tìm các hội nghị tổ chức tại Hội trường xã; cho biết mã, ngày giờ và trạng thái của từng hội nghị."],
-                ["HN-08", "Với hội nghị HN-0011, cho biết thời gian, địa điểm, báo cáo viên và người được phân công; ghi rõ trường nào chưa có dữ liệu."]
+                ["HN-03", "Ai được phân công và ai là báo cáo viên của hội nghị HN-0012?"],
+                ["HN-04", "Hội nghị của UBND phường Trảng Dài đang ở trạng thái nào? Nếu có nhiều hội nghị, hãy nêu mã và trạng thái từng hội nghị."],
+                ["HN-05", "Rà soát các hội nghị dự kiến diễn ra trong tháng 11/2026, gồm cả hồ sơ chưa phê duyệt; nêu mã, đơn vị, ngày tổ chức và trạng thái."],
+                ["HN-06", "Tìm các hội nghị tổ chức tại Hội trường xã; cho biết mã, ngày giờ và trạng thái của từng hội nghị."],
+                ["HN-07", "Với hội nghị HN-0011, cho biết thời gian, địa điểm, báo cáo viên và người được phân công; ghi rõ trường nào chưa có dữ liệu."]
             ]
         },
         {
@@ -22,8 +23,7 @@
                 ["BC-02", "Những chủ đề nào được người trả lời quan tâm nhiều nhất? Nêu cả số lượt và trường hợp đồng hạng."],
                 ["BC-03", "Các nhóm đối tượng tham dự được đề xuất trong phiếu khảo sát là gì?"],
                 ["BC-04", "Những vướng mắc pháp lý nào được nêu trong khảo sát? Chỉ tổng hợp nội dung và số lượt, không kết luận vụ việc."],
-                ["BC-05", "Tổng hợp các yêu cầu tư vấn nhận được trong tháng 10/2026."],
-                ["BC-06", "Tổng hợp cho tôi số lượng người tham dự hội nghị trong tháng 10/2026."]
+                ["BC-05", "Tổng hợp cho tôi số lượng người tham dự hội nghị trong tháng 10/2026."]
             ]
         },
         {
@@ -43,16 +43,17 @@
             title: "Yêu cầu tư vấn và liên hệ",
             hint: "Chỉ gửi câu hỏi tạo yêu cầu tư vấn khi thật sự muốn gửi yêu cầu đến admin.",
             items: [
-                ["TV-01", "Tổng hợp các yêu cầu tư vấn chưa phân công ngày 25/10/2026?"],
-                ["TV-02", "Hãy tổng hợp các yêu cầu tư vấn trong tháng 10/2026, gồm số lượng, trạng thái và nội dung chung; không hiển thị số điện thoại."]
+                ["TV-01", "Tổng hợp các yêu cầu tư vấn nhận được trong tháng 10/2026."],
+                ["TV-02", "Tổng hợp các yêu cầu tư vấn chưa phân công ngày 25/10/2026?"],
+                ["TV-03", "Hãy tổng hợp các yêu cầu tư vấn trong tháng 10/2026, gồm số lượng, trạng thái và nội dung chung; không hiển thị số điện thoại."]
             ]
         },
         {
             title: "Đề xuất kế hoạch hội nghị, tập huấn",
             hint: "Kiểm tra khả năng gợi ý khả thi và chờ người dùng xác nhận trước khi điền biểu mẫu hoặc phân công.",
             items: [
-                ["KH-01", "Giúp tôi đề xuất kế hoạch tập huấn về Luật Trợ giúp pháp lý cho cán bộ xã; nêu thông tin còn cần làm rõ trước khi chốt."],
-                ["KH-02", "Đề xuất địa bàn, quy mô người tham dự, chủ đề và tài liệu cần chuẩn bị cho buổi tuyên truyền pháp luật tại đơn vị tôi."],
+                ["KH-01", "Hãy giúp tôi lập kế hoạch cho xã Lộc Ninh, vào ngày 07/12/2026, nếu không đủ nhân sự, hãy đề xuất ngày gần nhất sau đó."],
+                ["KH-02", "Đề xuất địa bàn, nhân sự, quy mô người tham dự, để tổ chức hội nghị vào ngày 03/12/2026."],
                 ["KH-03", "Lập phương án tổ chức hội nghị với ngày, khung giờ, báo cáo viên, nhiệm vụ cán bộ và đơn vị phối hợp; chỉ đề xuất, chưa lưu hay phân công."],
                 ["KH-04", "Nếu lịch báo cáo viên đã bận hoặc không đủ cán bộ, hãy nêu phương án khả thi và phần cần admin xác nhận."],
                 ["KH-05", "Sau hội nghị, nên đánh giá kết quả bằng những số liệu nào từ đăng ký, điểm danh và phiếu khảo sát?"],
@@ -188,6 +189,10 @@
         return node;
     }
 
+    let floatingPanel = null;
+    let floatingToggle = null;
+    let renderCount = 0;
+
     async function waitForChat() {
         for (let attempt = 0; attempt < 50; attempt += 1) {
             const input = document.getElementById("tgplAiInput");
@@ -203,23 +208,24 @@
         const chat = await waitForChat();
         if (!chat) {
             status.textContent = "Chưa mở được khung chat. Hãy tải lại trang hoặc mở Trợ lý AI rồi thử lại.";
-            return;
+            return false;
         }
         const panel = document.getElementById("tgplAiPanel");
         if (panel?.hidden) chat.toggle.click();
         if (chat.input.disabled) {
             status.textContent = "Chatbot đang xử lý câu trước. Chờ xong rồi chọn câu mẫu.";
-            return;
+            return false;
         }
         if (chat.input.value.trim()) {
             status.textContent = "Ô chat đang có nội dung chưa gửi. Hãy gửi hoặc xóa nội dung đó trước khi nạp câu mẫu để tránh mất câu hỏi.";
             chat.input.focus();
-            return;
+            return false;
         }
         chat.input.value = prompt;
         chat.input.dispatchEvent(new Event("input", { bubbles: true }));
         chat.input.focus();
         status.textContent = "Đã đưa câu hỏi vào ô chat. Kiểm tra nội dung rồi bấm Gửi; câu hỏi chưa được gửi tự động.";
+        return true;
     }
 
     function addPromptRow(parent, id, prompt, status) {
@@ -229,12 +235,20 @@
         text.append(code, document.createTextNode(prompt));
         const button = create("button", "btn btn-sm btn-outline-primary", "Dùng câu hỏi");
         button.type = "button";
-        button.addEventListener("click", () => putInChat(prompt, status));
+        button.addEventListener("click", async () => {
+            const inserted = await putInChat(prompt, status);
+            if (inserted && floatingPanel) {
+                floatingPanel.hidden = true;
+                floatingToggle?.setAttribute("aria-expanded", "false");
+            }
+        });
         row.append(text, button);
         parent.appendChild(row);
     }
 
     function render(mount) {
+        renderCount += 1;
+        const instanceId = renderCount;
         const card = create("section", "chat-test-library");
         card.setAttribute("aria-labelledby", "chatTestLibraryTitle");
         const heading = create("header", "chat-test-library-heading");
@@ -242,15 +256,16 @@
         const roleTitle = roleCatalog?.label ? ` · ${roleCatalog.label}` : (activeRole === "ADMIN" ? " · Quản trị viên" : "");
         const roleDescription = roleCatalog?.description || "Chọn câu hỏi phù hợp với vai trò; kết quả chatbot vẫn tuân theo quyền tài khoản.";
         headingText.append(create("h2", "", `Câu hỏi mẫu kiểm thử${roleTitle}`), create("p", "", roleDescription));
-        headingText.querySelector("h2").id = "chatTestLibraryTitle";
+        headingText.querySelector("h2").id = `chatTestLibraryTitle-${instanceId}`;
+        card.setAttribute("aria-labelledby", `chatTestLibraryTitle-${instanceId}`);
         const badge = create("span", "badge text-bg-primary", `${groups.reduce((sum, group) => sum + group.items.length, 0)} câu hỏi`);
         heading.append(headingText, badge);
 
         const body = create("div", "chat-test-library-body");
         const searchLabel = create("label", "form-label fw-semibold", "Tìm nhanh câu hỏi");
-        searchLabel.htmlFor = "chatTestLibrarySearch";
         const search = create("input", "form-control chat-test-library-search");
-        search.id = "chatTestLibrarySearch";
+        search.id = `chatTestLibrarySearch-${instanceId}`;
+        searchLabel.htmlFor = search.id;
         search.type = "search";
         search.placeholder = "Ví dụ: HN-0012, khảo sát, nhiệm vụ 7 ngày…";
         search.setAttribute("aria-label", "Tìm trong câu hỏi mẫu");
@@ -274,8 +289,8 @@
         });
 
         const safetyNote = activeRole === "ADMIN"
-            ? "Lưu ý: câu hỏi về yêu cầu tư vấn chỉ nên gửi khi bạn thật sự muốn tạo yêu cầu. Câu mẫu chỉ được đưa vào ô chat; không tự gửi và không tự thay đổi dữ liệu hệ thống."
-            : "Câu mẫu chỉ được đưa vào ô chat sau khi bạn chọn; hãy kiểm tra nội dung rồi tự bấm Gửi. Chatbot chỉ trả dữ liệu mà vai trò của bạn được phép xem.";
+            ? "Bạn có thể sửa một phần câu mẫu (mã hội nghị, tên đơn vị/tài khoản, tháng/quý/năm hoặc cách hỏi) trước khi gửi để kiểm tra khả năng nhận diện. Chatbot phải dùng giá trị bạn vừa nhập; câu mẫu chỉ điền vào ô chat, không tự gửi hay thay đổi dữ liệu. Yêu cầu tư vấn chỉ gửi khi bạn thật sự muốn tạo yêu cầu."
+            : "Bạn có thể sửa mã hội nghị, đơn vị, kỳ thời gian hoặc cách diễn đạt trong câu mẫu trước khi gửi. Chatbot phải rà soát theo nội dung mới và quyền tài khoản hiện tại. Câu mẫu chỉ điền vào ô chat; hãy kiểm tra rồi tự bấm Gửi.";
         const caution = create("p", "chat-test-note mt-3 mb-0", safetyNote);
         body.appendChild(caution);
         card.append(heading, body);
@@ -293,8 +308,85 @@
         });
     }
 
-    document.addEventListener("DOMContentLoaded", () => {
+    function addFloatingLibrary() {
+        const assistant = document.getElementById("tgplAiAssistant");
+        if (!assistant || assistant.querySelector(".tgpl-chat-prompts-toggle")) return;
+
+        const styles = document.createElement("style");
+        styles.textContent = `
+            .tgpl-chat-prompts-toggle{position:absolute;right:calc(100% + 9px);bottom:0;display:inline-flex;align-items:center;gap:7px;min-height:46px;padding:0 14px;border:1px solid #cbddec;border-radius:999px;background:#fff;color:#175d8e;box-shadow:0 7px 20px rgba(17,65,104,.18);font:inherit;font-weight:700;white-space:nowrap}
+            .tgpl-chat-prompts-toggle:hover{background:#eff7fc;transform:translateY(-1px)}
+            .tgpl-chat-prompts-toggle:focus-visible{outline:3px solid #f0bd4d;outline-offset:2px}
+            .tgpl-chat-prompts-panel{position:absolute;right:calc(100% + 9px);bottom:0;width:min(390px,calc(100vw - 32px));max-height:min(72vh,680px);overflow:auto;z-index:2;border-radius:14px;background:#fff;box-shadow:0 18px 55px rgba(20,44,72,.24)}
+            .tgpl-chat-prompts-panel[hidden]{display:none!important}
+            .tgpl-chat-prompts-panel .chat-test-library{max-height:none;border-radius:14px}
+            .tgpl-chat-prompts-panel .chat-test-library-heading{padding:13px 15px}
+            .tgpl-chat-prompts-panel .chat-test-library-heading h2{font-size:1rem}
+            .tgpl-chat-prompts-panel .chat-test-library-heading p{font-size:.78rem}
+            .tgpl-chat-prompts-panel .chat-test-library-body{padding:12px 14px}
+            .tgpl-chat-prompts-panel .chat-test-group-content{max-height:230px;overflow:auto}
+            .tgpl-chat-prompts-panel .chat-test-note{font-size:.76rem}
+            @media(max-width:650px){
+                .tgpl-chat-prompts-toggle{right:0;bottom:calc(100% + 8px);min-height:40px;padding:0 12px;font-size:.85rem}
+                .tgpl-chat-prompts-panel{right:0;bottom:calc(100% + 54px);width:min(390px,calc(100vw - 28px));max-height:62vh}
+            }
+        `;
+        document.head.appendChild(styles);
+
+        floatingToggle = create("button", "tgpl-chat-prompts-toggle", "☷ Câu hỏi mẫu");
+        floatingToggle.type = "button";
+        floatingToggle.setAttribute("aria-expanded", "false");
+        floatingToggle.setAttribute("aria-controls", "tgplChatPromptsPanel");
+        floatingToggle.setAttribute("aria-label", "Mở bộ câu hỏi mẫu theo vai trò");
+        floatingPanel = create("aside", "tgpl-chat-prompts-panel");
+        floatingPanel.id = "tgplChatPromptsPanel";
+        floatingPanel.hidden = true;
+        floatingPanel.setAttribute("aria-label", "Bộ câu hỏi mẫu");
+        const mount = create("div");
+        floatingPanel.appendChild(mount);
+        render(mount);
+        assistant.append(floatingToggle, floatingPanel);
+
+        floatingToggle.addEventListener("click", () => {
+            const opening = floatingPanel.hidden;
+            if (opening && !document.getElementById("tgplAiPanel")?.hidden) {
+                document.getElementById("tgplAiClose")?.click();
+            }
+            floatingPanel.hidden = !opening;
+            floatingToggle.setAttribute("aria-expanded", String(opening));
+            if (opening) floatingPanel.querySelector('input[type="search"]')?.focus();
+        });
+        document.addEventListener("pointerdown", event => {
+            if (floatingPanel.hidden || floatingPanel.contains(event.target) || floatingToggle.contains(event.target)) return;
+            floatingPanel.hidden = true;
+            floatingToggle.setAttribute("aria-expanded", "false");
+        });
+        document.getElementById("tgplAiToggle")?.addEventListener("click", () => {
+            floatingPanel.hidden = true;
+            floatingToggle.setAttribute("aria-expanded", "false");
+        });
+        document.addEventListener("keydown", event => {
+            if (event.key === "Escape" && !floatingPanel.hidden) {
+                floatingPanel.hidden = true;
+                floatingToggle.setAttribute("aria-expanded", "false");
+                floatingToggle.focus();
+            }
+        });
+    }
+
+    function initialize() {
         const mount = document.getElementById("chatTestLibraryMount");
         if (mount) render(mount);
-    });
+        addFloatingLibrary();
+        if (!document.getElementById("tgplAiAssistant") && document.body) {
+            const observer = new MutationObserver(() => {
+                addFloatingLibrary();
+                if (document.getElementById("tgplAiAssistant")) observer.disconnect();
+            });
+            observer.observe(document.body, { childList: true, subtree: true });
+        }
+    }
+
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initialize, { once: true });
+    else initialize();
 })();

@@ -9,7 +9,7 @@ const LIMITS = Object.freeze({
 
 // Trusted planning policy is included in Ollama prompts, while eligibility is
 // enforced independently by backend code. This is policy context, not training.
-const SHORTAGE_POLICY = "Chỉ đề xuất phương án đủ cơ cấu: 3 cán bộ chính thức + 1 dự bị, 1 báo cáo viên chính thức + 1 dự bị. Phân tán nhiệm vụ để mỗi người chỉ nhận một nhiệm vụ trong bản nháp khi có thể; tuyệt đối không vượt hạn mức cá nhân 5 nhiệm vụ/tháng, 2/tuần với cán bộ và 3 lượt thuyết trình/tháng, 1/tuần với báo cáo viên. Nếu ngày yêu cầu không đủ người, tìm ngày làm việc khác trong 180 ngày. Nếu không có ngày đủ người, không lập phân công thiếu, không tự giảm cơ cấu, không lưu hoặc gửi thông báo; nêu rõ thiếu cán bộ/báo cáo viên và chờ admin quyết định dời lịch, bổ sung nhân sự hoặc thay đổi cơ cấu theo thẩm quyền.";
+const SHORTAGE_POLICY = "Cơ cấu mục tiêu: 3 cán bộ chính thức + 1 dự bị, 1 báo cáo viên chính thức + 1 dự bị. Không vượt hạn mức cá nhân 5 nhiệm vụ/tháng, 2/tuần với cán bộ và 3 lượt thuyết trình/tháng, 1/tuần với báo cáo viên. Nếu người dùng nêu ngày cụ thể, trước hết kiểm tra xung đột thời gian với lịch hội nghị đang ghi nhận; nếu không xung đột, giữ ngày đó làm phương án ưu tiên kể cả khi nhân sự chưa đủ cơ cấu. Nêu người phù hợp và tải tháng/tuần, chỉ rõ vị trí thiếu để admin quyết định; không tự vượt hạn mức, xác nhận phân công thiếu, lưu hoặc gửi thông báo. Có thể nêu thêm các ngày đủ cơ cấu làm phương án thay thế. Chỉ chuyển ngày khi ngày yêu cầu xung đột lịch, bị giới hạn công suất tháng hoặc người dùng đồng ý chọn phương án khác.";
 
 function localDateParts(value) {
     const date = new Date(value);
@@ -18,6 +18,15 @@ function localDateParts(value) {
         timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit"
     }).formatToParts(date).reduce((result, part) => (result[part.type] = part.value, result), {});
     return { year: Number(parts.year), month: Number(parts.month), day: Number(parts.day), monthKey: `${parts.year}-${parts.month}`, dayKey: `${parts.year}-${parts.month}-${parts.day}` };
+}
+
+function matchExplicitPlanningDate(value) {
+    const raw = String(value || "").normalize("NFKC");
+    const direct = raw.match(/\bngày\s*(\d{1,2})\s*[./-]\s*(\d{1,2})(?:\s*[./-]\s*(\d{4}))?\b/iu);
+    if (direct) return direct;
+    // Normalization can turn 07/12/2026 into "ngay 07 12 2026".
+    const normalized = raw.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[đĐ]/g, "d");
+    return normalized.match(/\bngay\s*(\d{1,2})\s+(\d{1,2})(?:\s+(\d{4}))?\b/iu);
 }
 
 function weekStartKey(value) {
@@ -83,16 +92,35 @@ function overlapsTimeInterval(start, end, intervals = []) {
     return intervals.some(interval => startMs < new Date(interval.end).getTime() && endMs > new Date(interval.start).getTime());
 }
 
+function hasConferenceScheduleConflict(start, end, conferences = []) {
+    return conferences.some(item => overlapsTimeInterval(start, end, [{
+        start: item.start_time ?? item.start,
+        end: item.end_time ?? item.end
+    }]));
+}
+
 function findApprovedScheduleConflicts(requestedStart, requestedEnd, requestedOrganizationId, conferences = []) {
     if (!requestedOrganizationId) return [];
-    return conferences.filter(item => String(item.status || "").toUpperCase() === "APPROVED"
+    return conferences.filter(item => {
+        const status = String(item.status || "").toUpperCase();
+        const confirmed = status === "APPROVED" || (status === "RESCHEDULED" && String(item.reschedule_response || "").toUpperCase() === "ACCEPTED");
+        return confirmed
         && String(item.organization_id || "") === String(requestedOrganizationId)
-        && overlapsTimeInterval(requestedStart, requestedEnd, [{ start: item.start, end: item.end }]))
+        && overlapsTimeInterval(requestedStart, requestedEnd, [{ start: item.start, end: item.end }]);
+    })
         .map(item => ({ code: item.code, title: item.title, organization_name: item.organization_name, start: item.start, end: item.end }));
 }
 function isConferenceMonthAvailable(date, countsByMonth, monthlyCap = 15) {
     const parts = localDateParts(date);
     return Boolean(parts && Number(countsByMonth?.get(parts.monthKey) || 0) < monthlyCap);
+}
+
+function canKeepRequestedSchedule({ start, end, now = new Date(), approvedConflicts = [], draftIntervals = [] } = {}) {
+    const startDate = new Date(start), endDate = new Date(end), nowDate = new Date(now);
+    if (!Number.isFinite(startDate.getTime()) || !Number.isFinite(endDate.getTime()) || endDate <= startDate
+        || !Number.isFinite(nowDate.getTime()) || startDate <= nowDate) return false;
+    if (approvedConflicts.length) return false;
+    return !overlapsTimeInterval(startDate, endDate, draftIntervals);
 }
 
 function findNearestFeasibleOptions(options, buildPlan, limits = LIMITS, maxOptions = 3) {
@@ -115,4 +143,29 @@ function findNearestFeasibleOptions(options, buildPlan, limits = LIMITS, maxOpti
     return { feasible, checked, bestCandidate };
 }
 
-module.exports = { LIMITS, SHORTAGE_POLICY, localDateParts, weekStartKey, personCapacity, rankAvailable, isFullyStaffed, staffingShortages, overlapsTimeInterval, findApprovedScheduleConflicts, isConferenceMonthAvailable, findNearestFeasibleOptions };
+function prioritizeRequestedDateOption(options, requestedDate, requestedDateCandidate) {
+    if (!requestedDate || !requestedDateCandidate
+        || localDateParts(requestedDateCandidate.option?.start_time)?.dayKey !== requestedDate) return options;
+    const candidateId = String(requestedDateCandidate.option?.id || "");
+    return [requestedDateCandidate, ...options.filter(item => String(item.option?.id || "") !== candidateId)];
+}
+
+function selectNearestDateOptions(checked, { requestedDate = "", maxOptions = 3, limits = LIMITS } = {}) {
+    const byDay = new Map();
+    for (const item of checked || []) {
+        const dayKey = localDateParts(item?.option?.start_time)?.dayKey;
+        if (!dayKey || dayKey === requestedDate) continue;
+        const current = byDay.get(dayKey);
+        const score = candidate => [
+            isFullyStaffed(candidate.staffing, limits) ? 0 : 1,
+            staffingShortages(candidate.staffing, limits).staff + staffingShortages(candidate.staffing, limits).speakers,
+            new Date(candidate.option.start_time).getTime()
+        ];
+        if (!current || score(item).some((value, index) => value < score(current)[index]
+            && score(item).slice(0, index).every((prior, priorIndex) => prior === score(current)[priorIndex]))) byDay.set(dayKey, item);
+    }
+    return [...byDay.entries()].sort((left, right) => left[0].localeCompare(right[0]))
+        .slice(0, Math.max(0, maxOptions)).map(([, item]) => item);
+}
+
+module.exports = { LIMITS, SHORTAGE_POLICY, localDateParts, matchExplicitPlanningDate, weekStartKey, personCapacity, rankAvailable, isFullyStaffed, staffingShortages, overlapsTimeInterval, hasConferenceScheduleConflict, findApprovedScheduleConflicts, isConferenceMonthAvailable, canKeepRequestedSchedule, findNearestFeasibleOptions, prioritizeRequestedDateOption, selectNearestDateOptions };

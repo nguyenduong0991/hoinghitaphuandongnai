@@ -33,9 +33,9 @@ Write-Host "Không hiển thị hoặc đọc mật khẩu, token hay khóa bí 
 
 # Frontend local
 try {
-    $front = Invoke-WebRequest -Uri "http://127.0.0.1:8080/" -TimeoutSec 5
+    $front = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:8080/" -TimeoutSec 5
     if ($front.StatusCode -ne 200) { throw "Frontend trả HTTP $($front.StatusCode)." }
-    $servedConfig = (Invoke-WebRequest -Uri "http://127.0.0.1:8080/assets/js/config.js?preflight=$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())" -TimeoutSec 5).Content
+    $servedConfig = (Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:8080/assets/js/config.js?preflight=$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())" -TimeoutSec 5).Content
     $normalizeLines = { param($Text) ([string]$Text -replace "`r`n?", "`n").Trim() }
     if ((&$normalizeLines $servedConfig) -ne (&$normalizeLines $localConfig)) { throw "Frontend trên cổng 8080 không phục vụ config.js của thư mục dự án hiện tại." }
     Pass "Frontend local hoạt động tại cổng 8080."
@@ -104,10 +104,10 @@ try {
     Pass "Frontend sạch và commit local khớp origin/main ($($localCommit.Substring(0,7)))."
 
     $siteConfigUrl = $publicSite + "assets/js/config.js?preflight=" + [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
-    $siteConfig = (Invoke-WebRequest -Uri $siteConfigUrl -TimeoutSec 10 -Headers @{ "Cache-Control" = "no-cache" }).Content
+    $siteConfig = (Invoke-WebRequest -UseBasicParsing -Uri $siteConfigUrl -TimeoutSec 10 -Headers @{ "Cache-Control" = "no-cache" }).Content
     if ((&$normalizeLines $siteConfig) -ne (&$normalizeLines $localConfig)) { throw "config.js của GitHub Pages khác frontend local; hãy đợi đồng bộ trang rồi kiểm tra lại." }
     if (-not $siteConfig.Contains($tunnel)) { throw "Frontend GitHub Pages chưa trỏ API đến tunnel hiện tại; có thể trang chưa cập nhật hoặc cache chưa hết." }
-    $site = Invoke-WebRequest -Uri ($publicSite + "?preflight=" + [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()) -TimeoutSec 10 -Headers @{ "Cache-Control" = "no-cache" }
+    $site = Invoke-WebRequest -UseBasicParsing -Uri ($publicSite + "?preflight=" + [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()) -TimeoutSec 10 -Headers @{ "Cache-Control" = "no-cache" }
     if ($site.StatusCode -ne 200) { throw "Frontend công khai trả HTTP $($site.StatusCode)." }
     Pass "Frontend GitHub Pages hoạt động và cấu hình API trỏ đúng tunnel."
 

@@ -8,13 +8,17 @@ $repoUrl = "https://github.com/nguyenduong0991/hoinghitaphuandongnai.git"
 $stdoutPath = Join-Path $env:TEMP "tgpl-cloudflared-$PID-out.log"
 $stderrPath = Join-Path $env:TEMP "tgpl-cloudflared-$PID-err.log"
 $tunnelProcess = $null
+$script:exitCode = 0
+$script:keepLogs = $false
 
 function Stop-Tunnel {
     if ($script:tunnelProcess -and -not $script:tunnelProcess.HasExited) {
         Stop-Process -Id $script:tunnelProcess.Id -Force -ErrorAction SilentlyContinue
         Write-Host "Quick Tunnel da dung." -ForegroundColor Yellow
     }
-    Remove-Item -LiteralPath $script:stdoutPath,$script:stderrPath -Force -ErrorAction SilentlyContinue
+    if (-not $script:keepLogs) {
+        Remove-Item -LiteralPath $script:stdoutPath,$script:stderrPath -Force -ErrorAction SilentlyContinue
+    }
 }
 
 try {
@@ -47,9 +51,25 @@ try {
     $configStatus = & git -C $projectRoot status --porcelain -- $apiConfigRelative
     if ($LASTEXITCODE -ne 0) { throw "Khong kiem tra duoc trang thai config.js." }
     if ($configStatus) { throw "assets/js/config.js dang co thay doi chua dong bo. Hay luu/hoan tac thay doi file nay truoc khi kich hoat tunnel." }
+    & git -C $projectRoot fetch --quiet origin main
+    if ($LASTEXITCODE -ne 0) { throw "Khong cap nhat duoc thong tin GitHub. Kiem tra mang/GitHub roi thu lai; chua co URL tunnel nao duoc cong bo." }
     $aheadBehind = (& git -C $projectRoot rev-list --left-right --count origin/main...HEAD).Trim() -split '\s+'
-    if ($LASTEXITCODE -ne 0 -or $aheadBehind.Count -ne 2 -or $aheadBehind[1] -ne "0") {
-        throw "Nhanh main dang co commit chua dong bo len GitHub. Hay dong bo truoc de file tunnel khong day kem commit khac."
+    if ($LASTEXITCODE -ne 0 -or $aheadBehind.Count -ne 2) { throw "Khong doi chieu duoc nhanh main voi GitHub." }
+    if ($aheadBehind[1] -eq "1") {
+        $lastSubject = (& git -C $projectRoot log -1 --format=%s).Trim()
+        $lastFiles = @(& git -C $projectRoot diff-tree --no-commit-id --name-only -r HEAD)
+        if ($LASTEXITCODE -ne 0 -or $lastSubject -ne "Update temporary Quick Tunnel API endpoint" -or $lastFiles.Count -ne 1 -or $lastFiles[0] -ne $apiConfigRelative) {
+            throw "Nhanh main co commit chua dong bo khong phai cap nhat tunnel gan nhat. Hay dong bo thu cong truoc khi chay tunnel."
+        }
+        Write-Host "Phat hien lan cap nhat URL tunnel truoc chua day len GitHub; dang thu dong bo commit do..." -ForegroundColor Yellow
+        & git -C $projectRoot push origin main
+        if ($LASTEXITCODE -ne 0) { throw "Chua day duoc commit cap nhat tunnel truoc len GitHub. Kiem tra ket noi/credential, sau do chay lai file nay." }
+        & git -C $projectRoot fetch --quiet origin main
+        if ($LASTEXITCODE -ne 0) { throw "Da day commit nhung khong xac minh duoc GitHub; chay lai sau khi ket noi on dinh." }
+        $aheadBehind = (& git -C $projectRoot rev-list --left-right --count origin/main...HEAD).Trim() -split '\s+'
+    }
+    if ($LASTEXITCODE -ne 0 -or $aheadBehind.Count -ne 2 -or $aheadBehind[0] -ne "0" -or $aheadBehind[1] -ne "0") {
+        throw "Nhanh main va GitHub dang lech nhau hoac co commit chua dong bo. Hay dong bo main truoc de tranh day sai phien ban."
     }
 
     Write-Host "Dang mo Quick Tunnel den backend localhost:3001..." -ForegroundColor Cyan
@@ -80,6 +100,25 @@ try {
     }
 
     $apiUrl = "$tunnelUrl/api"
+    $tunnelHost = ([Uri]$tunnelUrl).DnsSafeHost
+    $dnsReady = $false
+    $dnsDeadline = (Get-Date).AddSeconds(180)
+    $lastDnsError = ""
+    Write-Host "Dang cho DNS cua hostname Quick Tunnel san sang..." -ForegroundColor Cyan
+    while ((Get-Date) -lt $dnsDeadline -and -not $dnsReady) {
+        if ($tunnelProcess.HasExited) { throw "Quick Tunnel da dung truoc khi DNS san sang." }
+        try {
+            $dnsAnswers = @(Resolve-DnsName -Name $tunnelHost -Type A -DnsOnly -QuickTimeout -ErrorAction Stop)
+            $dnsReady = @($dnsAnswers | Where-Object { $_.Type -eq "A" -and $_.IPAddress }).Count -gt 0
+            if (-not $dnsReady) { $lastDnsError = "DNS chua tra ban ghi IPv4." }
+        } catch {
+            $lastDnsError = $_.Exception.Message
+        }
+        if (-not $dnsReady) { Start-Sleep -Seconds 5 }
+    }
+    if (-not $dnsReady) { throw "Hostname Quick Tunnel chua phan giai DNS sau 180 giay: $lastDnsError" }
+    Write-Host "DNS da san sang; dang kiem tra API qua tunnel..." -ForegroundColor Cyan
+
     $healthReady = $false
     $healthDeadline = (Get-Date).AddSeconds(60)
     $lastHealthError = ""
@@ -141,11 +180,15 @@ try {
     throw "Quick Tunnel da ket thuc."
 }
 catch {
+    $script:exitCode = 1
+    $script:keepLogs = $true
     Write-Host "LOI: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "Log cloudflared duoc giu lai de chan doan: $stdoutPath va $stderrPath" -ForegroundColor Yellow
     if ($tunnelProcess -and -not $tunnelProcess.HasExited) {
-        Write-Host "Tunnel se dung khi file nay dong. Kiem tra loi tren truoc khi thu lai." -ForegroundColor Yellow
+        Write-Host "Tunnel se duoc dung an toan khi ket thuc file nay. Kiem tra loi tren truoc khi thu lai." -ForegroundColor Yellow
     }
 }
 finally {
     Stop-Tunnel
 }
+exit $script:exitCode

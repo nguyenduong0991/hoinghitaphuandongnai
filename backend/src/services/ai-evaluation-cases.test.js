@@ -45,3 +45,34 @@ test("multi-turn evaluation cases preserve exact codes or request clarification 
         }
     }
 });
+
+test("dashboard question templates keep their intent when users replace key values", () => {
+    const variants = [
+        ["Hội nghị HN-0012 diễn ra khi nào, ở đâu và trạng thái hiện tại là gì?", "Hội nghị HN-0019 diễn ra khi nào, ở đâu và trạng thái hiện tại là gì?", "conference_lookup", "HN-0019"],
+        ["Hội nghị của UBND xã Lộc Tấn đang ở trạng thái nào?", "Hội nghị của UBND phường Long Bình đang ở trạng thái nào?", "conference_lookup", null],
+        ["Rà soát các hội nghị dự kiến diễn ra trong tháng 11/2026, gồm cả hồ sơ chưa phê duyệt.", "Rà soát các hội nghị dự kiến diễn ra trong tháng 12/2026, gồm cả hồ sơ chưa phê duyệt.", "conference_lookup", null],
+        ["Tài khoản Lethic có bao nhiêu nhiệm vụ trong tháng 10/2026?", "Tài khoản Phanthivan có bao nhiêu nhiệm vụ trong tháng 11/2026?", "tasks", null],
+        ["Hãy đề xuất phân công cán bộ và báo cáo viên cho hội nghị HN-0012.", "Hãy đề xuất phân công cán bộ và báo cáo viên cho hội nghị HN-0019.", "conference_planning", "HN-0019"],
+        ["Tháng 11/2026 có bao nhiêu hội nghị dự kiến?", "Trong tháng 12/2026 dự kiến có mấy hội nghị?", "conference_lookup", null]
+    ];
+
+    for (const [original, replacement, expectedIntent, expectedCode] of variants) {
+        const originalRoute = classifyQuestion(original);
+        const replacementRoute = classifyQuestion(replacement);
+        assert.equal(replacementRoute.intent, expectedIntent, replacement);
+        assert.equal(replacementRoute.intent, originalRoute.intent, replacement);
+        if (expectedCode) assert.equal(replacementRoute.querySlots.conferenceCode, expectedCode, replacement);
+    }
+});
+
+test("an explicitly replaced conference code is not inherited from an older turn", () => {
+    const { normalizeConversationHistory, resolveConversationContext } = require("./conversation-memory");
+    const history = normalizeConversationHistory([
+        { role: "user", content: "Hội nghị HN-0012 diễn ra khi nào?" },
+        { role: "assistant", content: "Đã tra cứu." }
+    ], 6);
+    const question = "Còn HN-0019 thì tổ chức ở đâu?";
+    const context = resolveConversationContext(question, history, classifyQuestion(question), classifyQuestion);
+    assert.equal(context.conferenceReferenceCode, null);
+    assert.equal(classifyQuestion(question).querySlots.conferenceCode, "HN-0019");
+});

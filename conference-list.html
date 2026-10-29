@@ -321,7 +321,7 @@
     <script src="assets/js/api.js?v=20261025-private-registration-access-1"></script>
     <script src="assets/js/attendance-tools.js?v=20261011-attendance-pages-1"></script>
     <script src="assets/js/attachments.js?v=20261005-attachment-management-2"></script>
-    <script src="assets/js/auth.js?v=20261025-plan-task-routing-1"></script>
+    <script src="assets/js/auth.js?v=20261028-floating-question-library-1"></script>
 
 
     <script>
@@ -834,7 +834,8 @@
                 const dateOptions = evidence.available_dates || [];
                 const selectedDate = dateOptions.find(item => item.id === activePlan.schedule_option_id) || dateOptions[0];
                 container.innerHTML = `
-                    <div class="alert alert-info py-2"><strong>Bản nháp cần admin duyệt.</strong> ${staffingResolution?.status === "ALTERNATIVE_DATE_REQUIRED" ? "Ngày yêu cầu không đủ cơ cấu nhân sự; các phương án bên dưới là ngày thay thế đã kiểm tra đủ người theo hạn mức. " : ""}Mỗi phương án là một khung ngày giờ đã kiểm tra không trùng ngày với hội nghị được phê duyệt và đủ cán bộ/báo cáo viên chính thức, dự bị; chọn phương án để áp dụng nguyên khung giờ. Số người là dự kiến, cần xác nhận với đơn vị.</div>
+                    <div class="alert alert-info py-2"><strong>Bản nháp cần admin duyệt.</strong> ${staffingResolution?.status === "REQUESTED_DATE_STAFFING_REVIEW" ? "Ngày giờ đơn vị đăng ký được giữ ưu tiên vì không trùng lịch đã duyệt cùng đơn vị. Cơ cấu nhân sự còn thiếu được nêu rõ bên dưới để admin quyết định; không tự vượt hạn mức. " : staffingResolution?.status === "REQUESTED_DATE_FEASIBLE" ? "Ngày giờ đơn vị đăng ký được giữ ưu tiên và đã đủ cơ cấu nhân sự theo hạn mức. " : staffingResolution?.status === "ALTERNATIVE_DATE_STAFFING_REVIEW" ? "Đây là các ngày gần nhất còn khung lịch; phương án thiếu người vẫn được đưa ra kèm tải của toàn bộ nhân sự để admin quyết định. " : staffingResolution?.status === "ALTERNATIVE_DATE_REQUIRED" ? "Ngày yêu cầu không thể giữ; các ngày thay thế gần nhất được rà theo lịch và tải nhân sự. " : ""}Ngày thay thế đã qua kiểm tra lịch và trần 15 hội nghị/tháng; cơ cấu đủ người được nêu riêng, không tự vượt hạn mức. Quy mô người tham dự là dự kiến, cần xác nhận với đơn vị.</div>
+                    ${staffingResolution?.schedule_diagnostics?.months?.length ? `<details class="small mb-3"><summary>Rà soát số hội nghị và khung lịch theo tháng</summary><ul class="mb-0 mt-1">${staffingResolution.schedule_diagnostics.months.map(item => `<li>${escapeHtml(item.month)}: ${Number(item.active_conferences || 0)}/${Number(staffingResolution.schedule_diagnostics.monthly_limit || 15)} hồ sơ đang hoạt động; còn ${Number(item.remaining_capacity || 0)} suất; ${Number(item.free_candidate_slots || 0)} khung giờ không trùng lịch cùng đơn vị; ${Number(item.weekdays_rejected_by_month_cap || 0)} ngày làm việc bị loại do trần tháng.</li>`).join("")}</ul></details>` : ""}
                     ${alternatives.length > 1 ? `<div class="mb-3"><label class="form-label fw-semibold" for="aiPlanAlternative">Phương án tổ chức và phân công</label><select id="aiPlanAlternative" class="form-select">${alternatives.map((item, index) => `<option value="${index}">${escapeHtml(item.label || `Phương án ${index + 1}`)}</option>`).join("")}</select><div class="form-text">Các lựa chọn phân bổ nhiệm vụ theo tải công việc và thay đổi ngày/báo cáo viên; chọn phương án để xem chi tiết.</div></div>` : ""}
                     <div class="row g-3 mb-3">
                         <div class="col-md-6"><div class="form-label fw-semibold">Ngày và giờ đề xuất</div><div id="aiPlanDateOption" class="form-control bg-light" aria-live="polite">${escapeHtml(selectedDate?.label || "Chưa có khung giờ")}</div><div id="aiPlanScheduleReason" class="form-text">${escapeHtml(activePlan.schedule_reason || "Khung giờ đã được hệ thống kiểm tra.")}</div></div>
@@ -882,6 +883,22 @@
                         const candidates = (availability.speakers || []).slice(0, 6).map(person => person.full_name + " (rảnh " + person.free_dates.join(", ") + ")");
                         addStaffingText("Thiếu báo cáo viên theo cơ cấu mong muốn. Đang trống lịch trong 3 ngày tới: " + (candidates.join("; ") || "chưa có người phù hợp"), "small text-warning-emphasis mt-2");
                     }
+                    const workloadReview = staffing.workload_review || {};
+                    const addWorkloadDetails = (title, people, roleLabel) => {
+                        if (!Array.isArray(people) || !people.length) return;
+                        const details = document.createElement("details"); details.className = "small mt-2";
+                        const summary = document.createElement("summary");
+                        summary.textContent = `${title}: ${people.filter(person => person.eligible).length}/${people.length} người còn hạn mức và trống lịch`;
+                        details.appendChild(summary);
+                        people.forEach(person => {
+                            const line = document.createElement("div"); line.className = "ms-3";
+                            line.textContent = `${roleLabel} ${person.full_name}: ${person.monthly_count}/${person.monthly_limit} tháng, ${person.weekly_count}/${person.weekly_limit} tuần — ${person.reason}`;
+                            details.appendChild(line);
+                        });
+                        staffingBox.appendChild(details);
+                    };
+                    addWorkloadDetails("Tải toàn bộ cán bộ", workloadReview.task_assignees, "Cán bộ");
+                    addWorkloadDetails("Tải toàn bộ báo cáo viên", workloadReview.speakers, "Báo cáo viên");
                     document.getElementById("aiPlanSpeakers").innerHTML = activePlan.speakers?.length ? activePlan.speakers.map((person, index) => `<div class="border rounded p-2 d-flex flex-wrap justify-content-between align-items-center gap-2"><div><strong>${escapeHtml(accountLabel(evidence.eligible_speakers || [], person.speaker_user_id))}</strong><div>${escapeHtml(person.presentation_title || "Chuyên đề hội nghị")} · ${Number(person.duration_minutes || 30)} phút</div></div><button type="button" class="btn btn-sm btn-outline-success" data-ai-speaker="${index}">Điền biểu mẫu</button></div>`).join("") : '<p class="text-muted">Chưa có tài khoản báo cáo viên phù hợp hoặc AI chưa đề xuất được.</p>';
                     const suggestedQuestions = Array.isArray(activePlan.speaker_questions) ? activePlan.speaker_questions : [];
                     document.getElementById("aiPlanQuestions").innerHTML = suggestedQuestions.length ? suggestedQuestions.map(question => `<li>${escapeHtml(question)}</li>`).join("") : "<li>Chưa tạo được câu hỏi phù hợp; admin có thể bổ sung câu hỏi trong ghi chú báo cáo viên.</li>";

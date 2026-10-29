@@ -476,8 +476,10 @@
         const staffing = plan.staffing_plan || {};
         const staff = staffing.staff || {};
         const speakers = staffing.speakers || {};
-        const staffNames = [...(staff.primary || []).map(person => `chính thức ${person.full_name}`), ...(staff.backup ? [`dự bị ${staff.backup.full_name}`] : [])].join(", ");
-        const speakerNames = [speakers.primary ? `chính thức ${speakers.primary.full_name}` : "", speakers.backup ? `dự bị ${speakers.backup.full_name}` : ""].filter(Boolean).join(", ");
+        const staffLoad = person => `${person.full_name} (tải ${Number(person.monthly_count || 0)}/${Number(person.monthly_limit || 5)} nhiệm vụ tháng, ${Number(person.weekly_count || 0)}/${Number(person.weekly_limit || 2)} tuần)`;
+        const speakerLoad = person => `${person.full_name} (tải ${Number(person.monthly_count || 0)}/${Number(person.monthly_limit || 3)} lượt tháng, ${Number(person.weekly_count || 0)}/${Number(person.weekly_limit || 1)} tuần)`;
+        const staffNames = [...(staff.primary || []).map(person => `chính thức ${staffLoad(person)}`), ...(staff.backup ? [`dự bị ${staffLoad(staff.backup)}`] : [])].join(", ");
+        const speakerNames = [speakers.primary ? `chính thức ${speakerLoad(speakers.primary)}` : "", speakers.backup ? `dự bị ${speakerLoad(speakers.backup)}` : ""].filter(Boolean).join(", ");
         const shortages = [];
         const available = data.available_staff_next_three_days || {};
         if (staff.primary_shortfall || !staff.backup_available) shortages.push(`Cán bộ còn thiếu; trống lịch 3 ngày tới: ${(available.task_assignees || []).slice(0, 5).map(person => `${person.full_name} (${person.free_dates.join(", ")})`).join("; ") || "chưa có người phù hợp"}`);
@@ -485,7 +487,9 @@
         const staffingText = resolution.status === "ADMIN_ASSIGNMENT_REQUIRED"
             ? "\n• Nhân sự chưa được gán trong bản gợi ý; admin sẽ kiểm tra hạn mức và lập phương án phân công phù hợp trước khi duyệt."
             : `\n• Cán bộ: ${staffNames || "chưa đủ người phù hợp"} (tối đa 5 nhiệm vụ/tháng, 2/tuần mỗi người; 3 chính thức + 1 dự bị).\n• Báo cáo viên: ${speakerNames || "chưa đủ người phù hợp"} (tối đa 3 lượt/tháng, 1/tuần mỗi người; 1 chính thức + 1 dự bị).${shortages.length ? `\n• ${shortages.join("\n• ")}` : ""}`;
-        return `Bản gợi ý kế hoạch (chưa lưu, chưa gửi thông báo):\n• Đơn vị/địa bàn: ${plan.organization_name || "cần xác nhận"}\n• Địa điểm: ${plan.location || "cần xác nhận"}${slot}\n• Quy mô dự kiến: ${plan.expected_attendees || "cần xác nhận"} người\n• Chủ đề: ${plan.legal_topic || "cần xác nhận"}\n• Tài liệu: ${documents || "cần xác định theo chủ đề"}\n• Căn cứ gợi ý: ${plan.rationale || "cần rà soát nhu cầu thực tế"}${staffingText}\n• Đơn vị có thể phối hợp: ${units || "cần admin chọn"}\n• Nhiệm vụ gợi ý: ${(plan.tasks || []).length}. Xác nhận từng mục bên dưới để điền biểu mẫu; thông báo chỉ gửi sau khi admin xác nhận từng đơn vị.`;
+        const resolutionNote = resolution.status === "REQUESTED_DATE_STAFFING_REVIEW" && resolution.note
+            ? `\n• Quyết định nhân sự: ${resolution.note}` : "";
+        return `Bản gợi ý kế hoạch (chưa lưu, chưa gửi thông báo):\n• Đơn vị/địa bàn: ${plan.organization_name || "cần xác nhận"}\n• Địa điểm: ${plan.location || "cần xác nhận"}${slot}\n• Quy mô dự kiến: ${plan.expected_attendees || "cần xác nhận"} người\n• Chủ đề: ${plan.legal_topic || "cần xác nhận"}\n• Tài liệu: ${documents || "cần xác định theo chủ đề"}\n• Căn cứ gợi ý: ${plan.rationale || "cần rà soát nhu cầu thực tế"}${staffingText}${resolutionNote}\n• Đơn vị có thể phối hợp: ${units || "cần admin chọn"}\n• Nhiệm vụ gợi ý: ${(plan.tasks || []).length}. Xác nhận từng mục bên dưới để điền biểu mẫu; thông báo chỉ gửi sau khi admin xác nhận từng đơn vị.`;
     }
     function addProposalCard(answerBubble, data) {
         const plan = data.proposal || {};
