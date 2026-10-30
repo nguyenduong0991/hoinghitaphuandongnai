@@ -640,6 +640,24 @@
                         <div class="col-md-6"><small class="text-muted">Kết thúc</small><div id="conferenceEndTime">${escapeHtml(formatDateTime(item.end_time))}</div></div>
                         <div id="rescheduleProposalDisplay" class="col-12 alert alert-info mb-0" ${item.proposed_start_time ? "" : "hidden"}><strong>Thời gian đề xuất dời:</strong> <span id="rescheduleProposalText">${item.proposed_start_time ? `${escapeHtml(formatDateTime(item.proposed_start_time))} – ${escapeHtml(formatDateTime(item.proposed_end_time))}${item.reschedule_note ? ` · ${escapeHtml(item.reschedule_note)}` : ""}` : ""}</span></div>
                         <div class="col-12 alert ${item.reschedule_response === "DECLINED" ? "alert-warning" : "alert-success"} mb-0" ${item.reschedule_response ? "" : "hidden"}><strong>Phản hồi dời lịch:</strong> ${item.reschedule_response === "ACCEPTED" ? "Đơn vị đã chấp thuận lịch mới." : item.reschedule_response === "DECLINED" ? "Đơn vị đã từ chối lịch mới; cần trao đổi hoặc đề xuất lại." : "Đang chờ đơn vị phản hồi."}</div>
+                        ${currentUser?.role === "COMMUNE" && currentUser.organization_id && String(item.organization_id) === String(currentUser.organization_id) && item.status === "RESCHEDULED" && (!item.reschedule_response || item.reschedule_response === "PENDING") ? `
+                        <div class="col-12">
+                            <section class="card border-warning shadow-sm reschedule-response-card" aria-labelledby="rescheduleResponseTitle">
+                                <div class="card-header bg-warning-subtle d-flex align-items-center gap-2">
+                                    <i class="bi bi-calendar2-check fs-5 text-warning-emphasis" aria-hidden="true"></i>
+                                    <div><h5 id="rescheduleResponseTitle" class="h6 mb-0">Xác nhận đề xuất dời lịch</h5><small class="text-muted">Vui lòng kiểm tra ngày giờ mới trước khi phản hồi.</small></div>
+                                </div>
+                                <div class="card-body">
+                                    <div class="reschedule-response-date mb-3"><span class="text-muted small d-block">Thời gian được đề xuất</span><strong>${escapeHtml(formatDateTime(item.proposed_start_time))}${item.proposed_end_time ? ` – ${escapeHtml(formatDateTime(item.proposed_end_time))}` : ""}</strong></div>
+                                    ${item.reschedule_note ? `<p class="small text-secondary mb-3"><strong>Ghi chú:</strong> ${escapeHtml(item.reschedule_note)}</p>` : ""}
+                                    <div class="d-flex flex-wrap gap-2">
+                                        <button id="acceptRescheduleResponse" type="button" class="btn btn-success"><i class="bi bi-check-circle me-1" aria-hidden="true"></i>Chấp thuận dời lịch</button>
+                                        <button id="declineRescheduleResponse" type="button" class="btn btn-outline-danger"><i class="bi bi-x-circle me-1" aria-hidden="true"></i>Từ chối dời</button>
+                                    </div>
+                                    <div id="rescheduleResponseMessage" class="small mt-2" role="status" aria-live="polite"></div>
+                                </div>
+                            </section>
+                        </div>` : ""}
                         <div id="scheduleConflictPanel" class="col-12 alert alert-info admin-only mb-0" role="status" hidden>Đang kiểm tra lịch trùng...</div>
                         <div class="col-md-6"><small class="text-muted">Lý do từ chối / hủy</small><div>${escapeHtml(item.rejection_reason || item.cancel_reason || "—")}</div></div>
                         <div class="col-md-6"><small class="text-muted">Số người dự kiến</small><div>${escapeHtml(item.expected_participants ?? 0)}</div></div>
@@ -734,6 +752,32 @@
                             <span id="detailActionMessage" class="small" role="status"></span>
                         </div>` : ""}
                     </div>`;
+                if (currentUser?.role === "COMMUNE" && currentUser.organization_id && String(item.organization_id) === String(currentUser.organization_id) && item.status === "RESCHEDULED" && (!item.reschedule_response || item.reschedule_response === "PENDING")) {
+                    const acceptButton = document.getElementById("acceptRescheduleResponse");
+                    const declineButton = document.getElementById("declineRescheduleResponse");
+                    const responseMessage = document.getElementById("rescheduleResponseMessage");
+                    const respond = async response => {
+                        const promptText = response === "ACCEPTED"
+                            ? "Xác nhận chấp thuận ngày giờ mới cho hội nghị này?"
+                            : "Xác nhận từ chối đề xuất dời lịch? Hội nghị sẽ cần được trao đổi hoặc đề xuất lại.";
+                        if (!window.confirm(promptText)) return;
+                        acceptButton.disabled = true;
+                        declineButton.disabled = true;
+                        responseMessage.className = "small mt-2 text-muted";
+                        responseMessage.textContent = "Đang lưu phản hồi…";
+                        try {
+                            await respondToConferenceReschedule(item.id, response);
+                            await loadConferenceDetailFromUrl();
+                        } catch (error) {
+                            responseMessage.className = "small mt-2 text-danger";
+                            responseMessage.textContent = error.message || "Không lưu được phản hồi dời lịch. Vui lòng thử lại.";
+                            acceptButton.disabled = false;
+                            declineButton.disabled = false;
+                        }
+                    };
+                    acceptButton.addEventListener("click", () => respond("ACCEPTED"));
+                    declineButton.addEventListener("click", () => respond("DECLINED"));
+                }
                 if (currentUser?.role === "ADMIN") {
                     document.getElementById("statusEdit").value = item.status || "PENDING";
                     const localDateTimeValue = value => {

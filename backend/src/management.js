@@ -847,6 +847,20 @@ router.post("/ai/conferences/:id/plan", requireRole("ADMIN"), async (req, res) =
         if (["COMPLETED", "CANCELLED", "REJECTED"].includes(conference.status)) {
             return res.status(409).json({ success: false, message: "Hội nghị đã đóng hoặc bị từ chối, không thể lập kế hoạch." });
         }
+        const now = new Date();
+        const requestedStart = new Date(conference.start_time);
+        const requestedStartForSearch = Number.isFinite(requestedStart.getTime())
+            ? new Date(requestedStart.getTime() + (forceReschedule ? 86400000 : 0)) : null;
+        const fallbackSearchStart = new Date(now.getTime() + 7 * 86400000);
+        const preferredStart = requestedStartForSearch && requestedStartForSearch > now ? requestedStartForSearch : null;
+        const preferredKey = planningDateParts(preferredStart || fallbackSearchStart)?.dayKey;
+        if (!preferredKey) return res.status(400).json({ success: false, message: "Không xác định được ngày bắt đầu rà soát lịch." });
+        const searchStartUtc = new Date(`${preferredKey}T00:00:00.000Z`);
+        const nominalSearchLastDay = new Date(searchStartUtc);
+        nominalSearchLastDay.setUTCDate(nominalSearchLastDay.getUTCDate() + 179);
+        const searchEndExclusive = new Date(Date.UTC(nominalSearchLastDay.getUTCFullYear(), nominalSearchLastDay.getUTCMonth() + 1, 1));
+        const candidateScanDays = Math.ceil((searchEndExclusive.getTime() - searchStartUtc.getTime()) / 86400000);
+        const searchWindowEnd = new Date(searchEndExclusive.getTime() - 86400000).toISOString().slice(0, 10);
 
         const [staffResult, speakerResult, registrationResult, publicResult, publicSituationResult, approvedResult, taskLoadResult, taskQuotaResult, speakerQuotaResult, nearTaskDatesResult, nearSpeakerDatesResult] = await Promise.all([
             pool.query(`SELECT u.id,u.username,u.full_name,o.name AS organization_name FROM users u LEFT JOIN organizations o ON o.id=u.organization_id
@@ -897,7 +911,7 @@ router.post("/ai/conferences/:id/plan", requireRole("ADMIN"), async (req, res) =
                   AND c.status IN ('PENDING','APPROVED','RESCHEDULED')
                   AND (CASE WHEN c.status='RESCHEDULED' AND c.reschedule_response IN ('PENDING','ACCEPTED') THEN c.proposed_start_time ELSE c.start_time END) IS NOT NULL
                   AND ((CASE WHEN c.status='RESCHEDULED' AND c.reschedule_response IN ('PENDING','ACCEPTED') THEN c.proposed_start_time ELSE c.start_time END) AT TIME ZONE 'Asia/Ho_Chi_Minh')::date >= (NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date
-                  AND ((CASE WHEN c.status='RESCHEDULED' AND c.reschedule_response IN ('PENDING','ACCEPTED') THEN c.proposed_start_time ELSE c.start_time END) AT TIME ZONE 'Asia/Ho_Chi_Minh')::date < (NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date + 181`, [conferenceId]),
+                   AND ((CASE WHEN c.status='RESCHEDULED' AND c.reschedule_response IN ('PENDING','ACCEPTED') THEN c.proposed_start_time ELSE c.start_time END) AT TIME ZONE 'Asia/Ho_Chi_Minh')::date < $2::date + 1`, [conferenceId, searchWindowEnd]),
             pool.query(`SELECT DISTINCT s.speaker_user_id::text AS user_id,
                     (COALESCE(c.proposed_start_time,c.start_time) AT TIME ZONE 'Asia/Ho_Chi_Minh')::date::text AS date_key
                 FROM conference_speakers s JOIN conferences c ON c.id=s.conference_id
@@ -905,14 +919,12 @@ router.post("/ai/conferences/:id/plan", requireRole("ADMIN"), async (req, res) =
                   AND c.status IN ('PENDING','APPROVED','RESCHEDULED')
                   AND (CASE WHEN c.status='RESCHEDULED' AND c.reschedule_response IN ('PENDING','ACCEPTED') THEN c.proposed_start_time ELSE c.start_time END) IS NOT NULL
                   AND ((CASE WHEN c.status='RESCHEDULED' AND c.reschedule_response IN ('PENDING','ACCEPTED') THEN c.proposed_start_time ELSE c.start_time END) AT TIME ZONE 'Asia/Ho_Chi_Minh')::date >= (NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date
-                  AND ((CASE WHEN c.status='RESCHEDULED' AND c.reschedule_response IN ('PENDING','ACCEPTED') THEN c.proposed_start_time ELSE c.start_time END) AT TIME ZONE 'Asia/Ho_Chi_Minh')::date < (NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date + 181`, [conferenceId])
+                   AND ((CASE WHEN c.status='RESCHEDULED' AND c.reschedule_response IN ('PENDING','ACCEPTED') THEN c.proposed_start_time ELSE c.start_time END) AT TIME ZONE 'Asia/Ho_Chi_Minh')::date < $2::date + 1`, [conferenceId, searchWindowEnd])
         ]);
 
-        const now = new Date();
         // Suggestions are not commitments. Do not let other unsaved AI drafts
         // consume dates, monthly slots, or staff/speaker quotas for this plan.
         const draftConstraints = { intervals: [], monthlyConferenceCounts: new Map(), taskWorkload: [], speakerWorkload: [], busyTaskDates: new Map(), busySpeakerDates: new Map() };
-        const requestedStart = new Date(conference.start_time);
         const requestedEnd = conference.end_time ? new Date(conference.end_time) : requestedStart;
         const dayKeyFor = date => new Date(date).toLocaleDateString("sv-SE", { timeZone: "Asia/Ho_Chi_Minh" });
         const requestedDurationMs = requestedEnd - requestedStart;
@@ -941,16 +953,14 @@ router.post("/ai/conferences/:id/plan", requireRole("ADMIN"), async (req, res) =
         }
         occupiedIntervals.push(...draftConstraints.intervals);
         for (const [monthKey, count] of draftConstraints.monthlyConferenceCounts) activeMonthlyCounts.set(monthKey, (activeMonthlyCounts.get(monthKey) || 0) + count);
-        const preferredStart = Number.isFinite(requestedStart.getTime())
-            ? new Date(requestedStart.getTime() + (forceReschedule ? 86400000 : 0)) : null;
-        const preferredKey = preferredStart && preferredStart > now
-            ? dayKeyFor(preferredStart) : dayKeyFor(new Date(now.getTime() + 7 * 86400000));
         const candidateDateOptions = [];
         const monthlyCapRejections = new Map();
         const candidateSlotsByMonth = new Map();
         const overlapRejections = new Map();
         const timeSlots = [{ startHour: 8, startMinute: 30 }, { startHour: 13, startMinute: 30 }];
-        for (let offset = 0; offset < 180; offset++) {
+        // Keep the nominal 180-day horizon, then finish the final calendar month
+        // so monthly diagnostics never report an artificially tiny partial month.
+        for (let offset = 0; offset < candidateScanDays; offset++) {
             const date = new Date(`${preferredKey}T00:00:00Z`); date.setUTCDate(date.getUTCDate() + offset);
             const dayKey = date.toISOString().slice(0, 10);
             const weekday = new Date(`${dayKey}T12:00:00+07:00`).getDay();
@@ -1067,9 +1077,11 @@ router.post("/ai/conferences/:id/plan", requireRole("ADMIN"), async (req, res) =
         });
         const diagnosticMonthKeys = [...new Set([
             ...activeMonthlyCounts.keys(), ...candidateSlotsByMonth.keys(), ...monthlyCapRejections.keys(), ...overlapRejections.keys()
-        ])].filter(key => key >= preferredKey.slice(0, 7) && key <= dayKeyFor(new Date(new Date(`${preferredKey}T00:00:00Z`).getTime() + 180 * 86400000)).slice(0, 7)).sort();
+        ])].filter(key => key >= preferredKey.slice(0, 7) && key <= searchWindowEnd.slice(0, 7)).sort();
         const scheduleDiagnostics = {
             monthly_limit: 15,
+            nominal_search_days: 180,
+            search_window_end: searchWindowEnd,
             months: diagnosticMonthKeys.map(month => ({ month,
                 active_conferences: Number(activeMonthlyCounts.get(month) || 0),
                 remaining_capacity: Math.max(0, 15 - Number(activeMonthlyCounts.get(month) || 0)),
@@ -1080,7 +1092,7 @@ router.post("/ai/conferences/:id/plan", requireRole("ADMIN"), async (req, res) =
             returned_options: dateOptions.map(option => ({ date: dayKeyFor(option.start_time), complete_staffing: option.staffing_complete, shortage: option.staffing_shortage }))
         };
         const bestCandidate = dateSearch.bestCandidate;
-        const checkedDays = 180;
+        const checkedDays = candidateScanDays;
         const todayParts = planningDateParts(new Date());
         const nextThreeDays = todayParts ? Array.from({ length: 3 }, (_, index) => {
             const date = new Date(Date.UTC(todayParts.year, todayParts.month - 1, todayParts.day + index));
