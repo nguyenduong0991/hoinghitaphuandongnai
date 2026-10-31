@@ -156,10 +156,20 @@ body {
 .tgpl-ai-form-footer button:disabled { opacity: .55; cursor: wait; }
 .tgpl-ai-toggle:focus-visible, .tgpl-ai-close:focus-visible, .tgpl-ai-clear:focus-visible, .tgpl-ai-form-footer button:focus-visible { outline: 3px solid #f0bd4d; outline-offset: 2px; }
 @media (max-width: 575.98px) {
-  .tgpl-ai-assistant { right: 14px; bottom: 14px; }
-  .tgpl-ai-panel, .tgpl-ai-panel-expanded { width: calc(100vw - 28px); height: min(620px, calc(100dvh - 92px)); min-height: min(340px, calc(100dvh - 92px)); }
+  .tgpl-ai-assistant { right: max(10px, env(safe-area-inset-right)); bottom: max(10px, env(safe-area-inset-bottom)); }
+  .tgpl-ai-panel, .tgpl-ai-panel-expanded { position: fixed; right: 10px; bottom: calc(max(10px, env(safe-area-inset-bottom)) + 56px); width: calc(100vw - 20px); max-width: 430px; height: min(640px, calc(100dvh - 82px - env(safe-area-inset-bottom))); min-height: min(300px, calc(100dvh - 82px - env(safe-area-inset-bottom))); }
   .tgpl-ai-header { gap: 6px; padding-right: 9px; padding-left: 9px; }
   .tgpl-ai-clear { padding: 5px 6px; font-size: .65rem; }
+  .tgpl-ai-header > div { min-width: 0; }
+  .tgpl-ai-header strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tgpl-ai-intro { max-height: 76px; overflow-y: auto; }
+  .tgpl-ai-form { padding: 8px 10px calc(10px + env(safe-area-inset-bottom)); }
+  .tgpl-ai-form textarea { min-height: 54px; max-height: 96px; }
+  .tgpl-ai-form-footer { align-items: stretch; flex-direction: column; gap: 7px; }
+  .tgpl-ai-form-footer small { max-width: none; }
+  .tgpl-ai-form-footer button { align-self: flex-end; min-height: 40px; min-width: 92px; }
+  #adminNotificationPanel, #registrantNotificationPanel, #staffNotificationPanel { position: fixed !important; inset: 72px 10px auto !important; width: auto !important; max-width: none !important; max-height: calc(100dvh - 88px - env(safe-area-inset-bottom)) !important; overflow: auto; overscroll-behavior: contain; z-index: 1200 !important; }
+  #adminNotificationPanel *, #registrantNotificationPanel *, #staffNotificationPanel * { overflow-wrap: anywhere; }
 }
 .report-period-controls { background: #fff; border: 1px solid #e5eaf0; border-radius: 12px; padding: 12px; }
 
@@ -340,3 +350,26 @@ body {
 .ai-calendar-day.is-available:hover{background:#b9edcd}
 .ai-calendar-day.is-selected{background:#0d6efd;color:#fff;box-shadow:0 0 0 2px #b6d4fe}
 .ai-calendar-legend{display:inline-block;width:.7rem;height:.7rem;border-radius:50%;background:#d9f5e5;border:1px solid #a8e4bf;vertical-align:middle}
+
+/* Keep notifications and chat inside the visual viewport on phones, including landscape. */
+@media (max-width: 900px) {
+  #adminNotificationPanel, #registrantNotificationPanel, #staffNotificationPanel {
+    position: fixed !important;
+    inset: max(64px, env(safe-area-inset-top)) 8px auto 8px !important;
+    width: auto !important;
+    max-width: none !important;
+    max-height: calc(100dvh - 78px - env(safe-area-inset-bottom)) !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    z-index: 1200 !important;
+    margin: 0 !important;
+  }
+  #adminNotificationPanel .card-header, #registrantNotificationPanel .card-header, #staffNotificationPanel .card-header { position: sticky; top: 0; z-index: 1; background: #fff; }
+  #adminNotificationPanel *, #registrantNotificationPanel *, #staffNotificationPanel * { min-width: 0; overflow-wrap: anywhere; word-break: normal; }
+  .tgpl-ai-assistant { right: max(8px, env(safe-area-inset-right)); bottom: max(8px, env(safe-area-inset-bottom)); }
+  .tgpl-ai-panel, .tgpl-ai-panel-expanded { position: fixed; right: 8px; bottom: calc(max(8px, env(safe-area-inset-bottom)) + 54px); width: calc(100vw - 16px); max-width: 520px; height: min(620px, calc(100dvh - 72px - env(safe-area-inset-bottom))); min-height: min(280px, calc(100dvh - 72px - env(safe-area-inset-bottom))); }
+  .tgpl-ai-form-footer { align-items: stretch; flex-direction: column; }
+  .tgpl-ai-form-footer small { max-width: none; }
+  .tgpl-ai-form-footer button { align-self: flex-end; min-height: 40px; }
+}
