@@ -6,7 +6,7 @@ const localBackendHost = ["localhost", "127.0.0.1"].includes(window.location.hos
     ? "localhost"
     : window.location.hostname;
 window.TGPL_API_BASE_URL = window.TGPL_API_BASE_URL || (isGitHubPages || isQuickTunnel
-    ? "https://mirrors-decorative-charleston-blocking.trycloudflare.com/api"
+    ? "https://spa-somerset-superb-sydney.trycloudflare.com/api"
     : `${window.location.protocol}//${localBackendHost}:3001/api`);
 
 // Load the shared startup dependency indicator on public and signed-in pages.
