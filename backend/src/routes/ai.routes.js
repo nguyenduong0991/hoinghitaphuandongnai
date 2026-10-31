@@ -813,12 +813,14 @@ function isContactRequestSummaryIntent(question) {
 
 async function loadLegalAidContactRequestSummary(user, question, requestedPeriod) {
     const unassignedOnly = /chua phan cong/.test(normalize(question));
+    const assignedOnly = !unassignedOnly && /(?:da phan cong|duoc phan cong)/.test(normalize(question));
     const scope = "($1::text='ADMIN' OR r.user_id=$2::uuid)";
     const params = [user.role, user.id, requestedPeriod?.from || null, requestedPeriod?.to || null];
     const where = `${scope}
         AND ($3::date IS NULL OR (r.created_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::date >= $3::date)
         AND ($4::date IS NULL OR (r.created_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::date < $4::date)` +
-        (unassignedOnly ? " AND r.status='PENDING' AND r.assigned_staff_user_id IS NULL" : "");
+        (unassignedOnly ? " AND r.status='PENDING' AND r.assigned_staff_user_id IS NULL"
+            : assignedOnly ? " AND r.assigned_staff_user_id IS NOT NULL AND r.status IN ('ASSIGNED','CONTACTED','CLOSED')" : "");
     const [totalsResult, samplesResult] = await Promise.all([
         pool.query(`SELECT COUNT(*)::int AS total,
                 COUNT(*) FILTER (WHERE r.status='PENDING')::int AS pending,
@@ -835,6 +837,7 @@ async function loadLegalAidContactRequestSummary(user, question, requestedPeriod
     const total = Number(totals.total) || 0;
     if (!total) return unassignedOnly
         ? `Không có yêu cầu tư vấn chưa phân công ${periodLabel} trong phạm vi dữ liệu tài khoản được xem.`
+        : assignedOnly ? `Không có yêu cầu tư vấn đã phân công ${periodLabel} trong phạm vi dữ liệu tài khoản được xem.`
         : `Không có yêu cầu tư vấn nào được ghi nhận ${periodLabel} trong phạm vi dữ liệu tài khoản được xem.`;
 
     const redact = (value, requesterName, phone) => {
@@ -862,7 +865,7 @@ async function loadLegalAidContactRequestSummary(user, question, requestedPeriod
         }
         const topicLines = [...topics.entries()].sort((a,b) => b[1]-a[1] || a[0].localeCompare(b[0],"vi"))
             .map(([topic,count]) => `• ${topic}: ${count} yêu cầu`).join("\n");
-        return `Tổng hợp yêu cầu tư vấn ${periodLabel}: ${total} yêu cầu; chưa phân công ${totals.pending || 0}, đã phân công ${totals.assigned || 0}, đã liên hệ ${totals.contacted || 0}, hoàn tất ${totals.closed || 0}.\nNội dung chung theo chủ đề (phân loại tối đa ${samplesResult.rows.length} yêu cầu gần nhất):\n${topicLines || "Chưa có nội dung mô tả."}`;
+        return `Tổng hợp yêu cầu tư vấn ${assignedOnly ? "đã phân công " : ""}${periodLabel}: ${total} yêu cầu${assignedOnly ? ` đã được giao cán bộ; tình trạng hiện tại: đang phân công ${totals.assigned || 0}, đã liên hệ ${totals.contacted || 0}, hoàn tất ${totals.closed || 0}` : `; chưa phân công ${totals.pending || 0}, đã phân công ${totals.assigned || 0}, đã liên hệ ${totals.contacted || 0}, hoàn tất ${totals.closed || 0}`}。\nNội dung chung theo chủ đề (phân loại ${samplesResult.rows.length} yêu cầu trong phạm vi lọc):\n${topicLines || "Chưa có nội dung mô tả."}`;
     }    if (unassignedOnly) {
         const examples = samplesResult.rows.map(row => redact(row.question, row.requester_name, row.phone)).filter(Boolean).slice(0, 5);
         return `Tổng hợp yêu cầu tư vấn chưa phân công ${periodLabel}: ${total} yêu cầu.${examples.length ? `\nNội dung đã ẩn thông tin liên hệ:\n${examples.map(item => `• ${item}`).join("\n")}` : ""}`;
@@ -876,7 +879,7 @@ async function loadLegalAidContactRequestSummary(user, question, requestedPeriod
     const details = uniqueRequests.size
         ? `Một số nội dung đã ẩn thông tin liên hệ:\n${[...uniqueRequests.values()].map(item => `• ${item}`).join("\n")}`
         : "Các yêu cầu chưa có nội dung mô tả.";
-    return `Tổng hợp yêu cầu tư vấn ${periodLabel}: ${total} yêu cầu; chưa phân công ${totals.pending || 0}, đã phân công ${totals.assigned || 0}, đã liên hệ ${totals.contacted || 0}, hoàn tất ${totals.closed || 0}.\n${details}${Number(samplesResult.rows.length) < total ? `\nDanh sách nội dung minh họa lấy từ tối đa ${samplesResult.rows.length} yêu cầu gần nhất; số đếm trạng thái tính trên toàn bộ kỳ.` : ""}`;
+    return `Tổng hợp yêu cầu tư vấn ${assignedOnly ? "đã phân công " : ""}${periodLabel}: ${total} yêu cầu${assignedOnly ? ` đã được giao cán bộ; tình trạng hiện tại: đang phân công ${totals.assigned || 0}, đã liên hệ ${totals.contacted || 0}, hoàn tất ${totals.closed || 0}` : `; chưa phân công ${totals.pending || 0}, đã phân công ${totals.assigned || 0}, đã liên hệ ${totals.contacted || 0}, hoàn tất ${totals.closed || 0}`}。\n${details}${Number(samplesResult.rows.length) < total ? `\nDanh sách nội dung minh họa lấy từ tối đa ${samplesResult.rows.length} yêu cầu trong phạm vi lọc.` : ""}`;
 }
 
 async function loadConferenceContext(user, question) {

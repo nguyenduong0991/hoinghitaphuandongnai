@@ -449,8 +449,8 @@ async function getStaffChangeRequests() { return apiRequest("/staff-change-reque
 async function reviewStaffChangeRequest(id, decision) {
     return apiRequest(`/staff-change-requests/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(decision) });
 }
-async function updateMyTaskStatus(id, status) {
-    return apiRequest(`/my-assignments/tasks/${encodeURIComponent(id)}/status`, { method: "PATCH", body: JSON.stringify({ status }) });
+async function updateMyTaskStatus(id, status, completedAt = null) {
+    return apiRequest(`/my-assignments/tasks/${encodeURIComponent(id)}/status`, { method: "PATCH", body: JSON.stringify({ status, ...(completedAt ? { completed_at: completedAt } : {}) }) });
 }
 async function getAssignmentReports(filters = {}) {
     const query = new URLSearchParams(filters).toString();

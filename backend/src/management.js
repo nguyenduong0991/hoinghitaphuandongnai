@@ -2068,7 +2068,7 @@ router.patch("/staff-change-requests/:id", requireRole("ADMIN"), async (req, res
 });
 router.get("/my-assignments", requireRole("TASK_ASSIGNEE", "SPEAKER"), async (req, res) => {
     const [tasks, speakers] = await Promise.all([
-        pool.query(`SELECT a.id,a.conference_id,a.title,a.description,a.assignee_user_id,a.assignee_name,a.assignee_organization,a.due_at,a.status,
+        pool.query(`SELECT a.id,a.conference_id,a.title,a.description,a.assignee_user_id,a.assignee_name,a.assignee_organization,a.due_at,a.status,a.completed_at,
                 c.code AS conference_code,c.title AS conference_title,c.start_time,c.end_time,c.status AS conference_status,c.location_name,c.location_address,
                 o.name AS organization_name
             FROM conference_task_assignments a JOIN conferences c ON c.id=a.conference_id
@@ -2107,13 +2107,26 @@ router.post("/my-assignments/tasks/:id/attachments", requireRole("TASK_ASSIGNEE"
 router.patch("/my-assignments/tasks/:id/status", requireRole("TASK_ASSIGNEE"), async (req, res) => {
     const status = String(req.body?.status || "").toUpperCase();
     if (!["IN_PROGRESS", "COMPLETED"].includes(status)) return res.status(400).json({ success: false, message: "Chỉ được cập nhật tiến độ sang đang thực hiện hoặc hoàn thành." });
+    const suppliedCompletion = req.body?.completed_at ? new Date(req.body.completed_at) : null;
+    if (req.body?.completed_at && (!Number.isFinite(suppliedCompletion.getTime()) || suppliedCompletion > new Date())) {
+        return res.status(400).json({ success: false, message: "Thời điểm hoàn thành phải là ngày giờ hợp lệ và không ở tương lai." });
+    }
     const client = await pool.connect();
     try {
         await client.query("BEGIN");
-        const task = await client.query("SELECT id FROM conference_task_assignments WHERE id=$1 AND assignee_user_id=$2 AND status IN ('ASSIGNED','IN_PROGRESS') FOR UPDATE", [req.params.id,req.user.id]);
+        const task = await client.query("SELECT id,status,completed_at,created_at FROM conference_task_assignments WHERE id=$1 AND assignee_user_id=$2 AND status IN ('ASSIGNED','IN_PROGRESS','COMPLETED') FOR UPDATE", [req.params.id,req.user.id]);
         if (!task.rowCount) {
             await client.query("ROLLBACK");
             return res.status(404).json({ success: false, message: "Không tìm thấy nhiệm vụ được giao cho tài khoản này hoặc nhiệm vụ đã kết thúc." });
+        }
+        const isBackfill = task.rows[0].status === "COMPLETED";
+        if (isBackfill && (status !== "COMPLETED" || task.rows[0].completed_at || !suppliedCompletion)) {
+            await client.query("ROLLBACK");
+            return res.status(409).json({ success: false, message: "Chỉ được bổ sung thời điểm còn thiếu cho nhiệm vụ đã hoàn thành." });
+        }
+        if (suppliedCompletion && suppliedCompletion < new Date(task.rows[0].created_at)) {
+            await client.query("ROLLBACK");
+            return res.status(400).json({ success: false, message: "Thời điểm hoàn thành không thể trước ngày giao nhiệm vụ." });
         }
         if (status === "COMPLETED") {
             const pendingChange = await client.query("SELECT id FROM conference_staff_change_requests WHERE request_type='TASK' AND task_assignment_id=$1 AND status='PENDING' LIMIT 1", [req.params.id]);
@@ -2123,9 +2136,9 @@ router.patch("/my-assignments/tasks/:id/status", requireRole("TASK_ASSIGNEE"), a
             }
         }
         const result = await client.query(`UPDATE conference_task_assignments SET status=$1,
-                completed_at=CASE WHEN $1='COMPLETED' THEN COALESCE(completed_at,NOW()) ELSE NULL END,
+                completed_at=CASE WHEN $1='COMPLETED' THEN COALESCE(completed_at,$4,NOW()) ELSE NULL END,
                 updated_at=NOW()
-            WHERE id=$2 AND assignee_user_id=$3 AND status IN ('ASSIGNED','IN_PROGRESS') RETURNING id,status,completed_at,updated_at`, [status,req.params.id,req.user.id]);
+            WHERE id=$2 AND assignee_user_id=$3 AND (status IN ('ASSIGNED','IN_PROGRESS') OR (status='COMPLETED' AND completed_at IS NULL AND $4 IS NOT NULL)) RETURNING id,status,completed_at,updated_at`, [status,req.params.id,req.user.id,suppliedCompletion?.toISOString() || null]);
         await client.query("COMMIT");
         res.json({ success: true, data: result.rows[0] });
     } catch (error) {

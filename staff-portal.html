@@ -34,12 +34,12 @@
         <section class="card"><div class="card-header d-flex justify-content-between align-items-center"><strong>Lịch báo cáo viên</strong><span id="speakerCount" class="badge text-bg-success">0</span></div><div id="speakerList" class="card-body"><span class="text-muted">Đang tải...</span></div></section>
     </main>
     <script src="assets/js/config.js?v=20261023-service-status-1"></script>
-    <script src="assets/js/api.js?v=20261026-reschedule-plan-intent-1"></script>
+    <script src="assets/js/api.js?v=20261031-task-completion-time-1"></script>
     <script src="assets/js/auth.js?v=20261028-floating-question-library-1"></script>
     <script src="assets/js/attachments.js?v=20261005-attachment-management-4"></script>
     <script src="assets/js/attendance-tools.js?v=20261011-attendance-pages-1"></script>
     <script src="assets/js/notification-read-state.js?v=20261027-notification-read-1"></script>
-    <script src="assets/js/chat-test-library.js?v=20261028-floating-question-library-1"></script>
+    <script src="assets/js/chat-test-library.js?v=20261031-remove-hn0001-assignment-1"></script>
     <script>
         const currentUser = JSON.parse(localStorage.getItem("tgpl.user") || "null");
         const dateTime = value => value ? new Date(value).toLocaleString("vi-VN", { dateStyle: "medium", timeStyle: "short" }) : "Chưa xác định";
@@ -541,7 +541,7 @@
                     line(card, `Người nhận: ${task.assignee_name}${task.assignee_organization ? ` · ${task.assignee_organization}` : ""}`, "small");
                     if (task.description) line(card, task.description, "mt-2");
                     const status = { ASSIGNED: "Đã giao", IN_PROGRESS: "Đang thực hiện", COMPLETED: "Hoàn thành", CANCELLED: "Đã hủy" };
-                    const statusLine = line(card, `Trạng thái: ${status[task.status] || task.status}${task.due_at ? ` · Hạn: ${dateTime(task.due_at)}` : ""}`, "small mt-2");
+                    const statusLine = line(card, `Trạng thái: ${status[task.status] || task.status}${task.due_at ? ` · Hạn: ${dateTime(task.due_at)}` : ""}${task.completed_at ? ` · Hoàn thành lúc: ${dateTime(task.completed_at)}` : ""}`, "small mt-2");
                     if (currentUser?.role === "TASK_ASSIGNEE" && String(task.assignee_user_id) === String(currentUser.id) && task.status !== "CANCELLED" && task.status !== "COMPLETED") {
                         const hasPendingChange = requests.some(request => request.request_type === "TASK" && String(request.task_assignment_id) === String(task.id) && request.status === "PENDING");
                         const controls = document.createElement("div"); controls.className = "mt-2 d-flex gap-2";
@@ -550,12 +550,24 @@
                         if (changeRequestServiceAvailable && !hasPendingChange) statusOptions.push(["COMPLETED", "Hoàn thành"]);
                         statusOptions.forEach(([value, label]) => { const option = document.createElement("option"); option.value = value; option.textContent = label; select.appendChild(option); });
                         if (task.status === "IN_PROGRESS") select.value = "IN_PROGRESS";
+                        const completedAt = document.createElement("input"); completedAt.type = "datetime-local"; completedAt.className = "form-control form-control-sm"; completedAt.setAttribute("aria-label", "Thời điểm hoàn thành"); completedAt.title = "Thời điểm hoàn thành"; completedAt.hidden = true;
+                        const localNow = new Date(); completedAt.value = new Date(localNow.getTime() - localNow.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+                        const syncCompletionField = () => { completedAt.hidden = select.value !== "COMPLETED"; };
+                        select.addEventListener("change", syncCompletionField);
                         const save = document.createElement("button"); save.type = "button"; save.className = "btn btn-sm btn-outline-primary"; save.textContent = "Cập nhật tiến độ";
-                        save.addEventListener("click", async () => { save.disabled = true; try { await updateMyTaskStatus(task.id, select.value); await loadAssignments(); } catch (error) { message.textContent = error.message; message.hidden = false; save.disabled = false; } });
-                        controls.append(select, save); card.appendChild(controls);
+                        save.addEventListener("click", async () => { save.disabled = true; try { await updateMyTaskStatus(task.id, select.value, select.value === "COMPLETED" ? new Date(completedAt.value).toISOString() : null); await loadAssignments(); } catch (error) { message.textContent = error.message; message.hidden = false; save.disabled = false; } });
+                        controls.append(select, completedAt, save); card.appendChild(controls);
                         if (hasPendingChange) line(card, "Đề nghị đổi cán bộ đang chờ admin xử lý; chưa thể đánh dấu nhiệm vụ hoàn thành.", "small text-warning mt-2");
                         else if (!changeRequestServiceAvailable) line(card, "Chưa kiểm tra được đề nghị đổi cán bộ; lựa chọn hoàn thành tạm thời bị khóa.", "small text-warning mt-2");
                         appendChangeRequest(card, "TASK", task.id, requests, changeRequestServiceAvailable);
+                    }
+                    if (currentUser?.role === "TASK_ASSIGNEE" && String(task.assignee_user_id) === String(currentUser.id) && task.status === "COMPLETED" && !task.completed_at) {
+                        const backfill = document.createElement("div"); backfill.className = "mt-2 d-flex flex-wrap gap-2 align-items-end";
+                        const fieldWrap = document.createElement("label"); fieldWrap.className = "small"; fieldWrap.textContent = "Bổ sung thời điểm hoàn thành thực tế";
+                        const completedAt = document.createElement("input"); completedAt.type = "datetime-local"; completedAt.className = "form-control form-control-sm mt-1"; completedAt.setAttribute("aria-label", "Thời điểm hoàn thành thực tế");
+                        const saveDate = document.createElement("button"); saveDate.type = "button"; saveDate.className = "btn btn-sm btn-outline-primary"; saveDate.textContent = "Lưu thời điểm";
+                        saveDate.addEventListener("click", async () => { if (!completedAt.value) { completedAt.reportValidity(); return; } saveDate.disabled = true; try { await updateMyTaskStatus(task.id, "COMPLETED", new Date(completedAt.value).toISOString()); await loadAssignments(); } catch (error) { message.textContent = error.message; message.hidden = false; saveDate.disabled = false; } });
+                        fieldWrap.appendChild(completedAt); backfill.append(fieldWrap, saveDate); card.appendChild(backfill);
                     }
                     if (currentUser?.role === "TASK_ASSIGNEE" && String(task.assignee_user_id) === String(currentUser.id)) {
                         await appendTaskAttachments(card, task);

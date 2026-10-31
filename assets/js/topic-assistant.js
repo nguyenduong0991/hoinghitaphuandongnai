@@ -497,10 +497,8 @@
         card.className = "tgpl-ai-plan-card border rounded p-3 mt-2 bg-white";
         const heading = document.createElement("strong"); heading.textContent = "Rà soát và xác nhận từng đề xuất"; card.appendChild(heading);
         const note = document.createElement("p"); note.className = "small text-muted mb-2";
-        note.textContent = "Chỉ mục bạn xác nhận mới được điền biểu mẫu. Không có nhiệm vụ nào được giao và không có thông báo nào tự gửi."; card.appendChild(note);
+        note.textContent = "Đây là đề xuất cho hội nghị mới. Thẻ này chỉ hỗ trợ điền biểu mẫu đăng ký hội nghị; nhiệm vụ, cán bộ và báo cáo viên chưa được phân công. Không có dữ liệu nào được lưu hoặc thông báo nào được gửi cho đến khi bạn tự xác nhận biểu mẫu."; card.appendChild(note);
         const status = document.createElement("div"); status.className = "small text-muted mt-2"; card.appendChild(status);
-        const taskAssignees = data.eligible_task_assignees || [];
-        const speakers = data.eligible_speakers || [];
         function addConfirmRow(title, description, actionLabel, action, canAct = true) {
             const row = document.createElement("div"); row.className = "border rounded p-2 mb-2";
             const strong = document.createElement("div"); strong.className = "fw-semibold"; strong.textContent = title; row.appendChild(strong);
@@ -546,33 +544,9 @@
             sessionStorage.setItem("tgpl.ai.pending-conference-plan", JSON.stringify(conferenceDraft));
             location.assign(new URL("create-conference.html", location.href).href);
         }, ["ADMIN", "COMMUNE"].includes(user.role));
-        (plan.tasks || []).forEach((task, index) => {
-            const assignee = taskAssignees.find(person => String(person.id) === String(task.assignee_user_id));
-            const label = assignee ? ` · ${assignee.full_name}${assignee.organization_name ? ` (${assignee.organization_name})` : ""}` : " · admin chọn cán bộ";
-            addConfirmRow(`Nhiệm vụ ${index + 1}: ${task.title || "Chuẩn bị hội nghị"}`, `${task.description || ""}${label}`, "Xác nhận & điền biểu mẫu nhiệm vụ", async () => {
-                if (user.role !== "ADMIN") throw new Error("Bạn có thể xem gợi ý; chỉ admin mới được điền biểu mẫu phân công.");
-                const title = document.getElementById("assignmentTitle");
-                if (!title) throw new Error("Mở chi tiết một hội nghị trong Danh sách hội nghị để điền biểu mẫu nhiệm vụ. Chưa có nhiệm vụ nào được giao.");
-                title.value = task.title || "";
-                const descriptionInput = document.getElementById("assignmentDescription"); if (descriptionInput) descriptionInput.value = task.description || "";
-                const assigneeInput = document.getElementById("assignmentAssignee"); if (assigneeInput && assignee) { assigneeInput.value = assignee.id; assigneeInput.dispatchEvent(new Event("change", { bubbles: true })); }
-                const organizationInput = document.getElementById("assignmentOrganization"); if (organizationInput) organizationInput.value = assignee?.organization_name || "";
-                const dueInput = document.getElementById("assignmentDueAt"); if (dueInput && task.due_at) { const due = new Date(task.due_at); dueInput.value = Number.isNaN(due.getTime()) ? "" : new Date(due.getTime() - due.getTimezoneOffset() * 60000).toISOString().slice(0, 16); }
-                title.scrollIntoView({ behavior: "smooth", block: "center" }); status.textContent = "Đã điền biểu mẫu nhiệm vụ; admin rà soát rồi tự bấm Giao nhiệm vụ để lưu.";
-            }, user.role === "ADMIN");
-        });
-        (plan.speakers || []).forEach((speaker, index) => {
-            const person = speakers.find(item => String(item.id) === String(speaker.speaker_user_id));
-            addConfirmRow(`Báo cáo viên ${index + 1}: ${person?.full_name || "chưa chọn"}`, `${speaker.topic || ""}${person?.organization_name ? ` · ${person.organization_name}` : ""}`, "Xác nhận & điền biểu mẫu báo cáo viên", async () => {
-                if (user.role !== "ADMIN") throw new Error("Chỉ admin mới được điền biểu mẫu phân công báo cáo viên.");
-                const nameInput = document.getElementById("speakerName");
-                if (!nameInput) throw new Error("Mở chi tiết hội nghị để điền biểu mẫu báo cáo viên. Chưa có phân công nào được lưu.");
-                nameInput.value = speaker.speaker_user_id || "";
-                const topicInput = document.getElementById("speakerTopic"); if (topicInput) topicInput.value = speaker.topic || plan.legal_topic || "";
-                const notes = document.getElementById("speakerNotes"); if (notes) notes.value = speaker.notes || "";
-                nameInput.scrollIntoView({ behavior: "smooth", block: "center" }); status.textContent = "Đã điền biểu mẫu báo cáo viên; admin rà soát rồi tự bấm Thêm báo cáo viên để lưu.";
-            }, user.role === "ADMIN");
-        });
+        // A generic proposal creates a new conference registration draft only.
+        // Assignment and speaker forms are available from an existing conference's
+        // dedicated planning workflow, where its code and permissions are explicit.
         (plan.notification_drafts || []).forEach(draft => {
             const organization = (plan.suggested_units || []).find(item => String(item.id) === String(draft.organization_id));
             if (user.role !== "ADMIN") {

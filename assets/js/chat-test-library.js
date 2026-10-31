@@ -11,8 +11,7 @@
                 ["HN-03", "Ai được phân công và ai là báo cáo viên của hội nghị HN-0012?"],
                 ["HN-04", "Hội nghị của UBND phường Trảng Dài đang ở trạng thái nào? Nếu có nhiều hội nghị, hãy nêu mã và trạng thái từng hội nghị."],
                 ["HN-05", "Rà soát các hội nghị dự kiến diễn ra trong tháng 11/2026, gồm cả hồ sơ chưa phê duyệt; nêu mã, đơn vị, ngày tổ chức và trạng thái."],
-                ["HN-06", "Tìm các hội nghị tổ chức tại Hội trường xã; cho biết mã, ngày giờ và trạng thái của từng hội nghị."],
-                ["HN-07", "Với hội nghị HN-0011, cho biết thời gian, địa điểm, báo cáo viên và người được phân công; ghi rõ trường nào chưa có dữ liệu."]
+                ["HN-06", "Với hội nghị HN-0011, cho biết thời gian, địa điểm, báo cáo viên và người được phân công; ghi rõ trường nào chưa có dữ liệu."]
             ]
         },
         {
@@ -58,8 +57,7 @@
                 ["KH-04", "Nếu lịch báo cáo viên đã bận hoặc không đủ cán bộ, hãy nêu phương án khả thi và phần cần admin xác nhận."],
                 ["KH-05", "Sau hội nghị, nên đánh giá kết quả bằng những số liệu nào từ đăng ký, điểm danh và phiếu khảo sát?"],
                 ["KH-06", "Với hội nghị mã HN-0012, rà soát hồ sơ và đề xuất danh sách nhiệm vụ cần giao, cán bộ phù hợp theo tài khoản, thời hạn và căn cứ phân công. Chỉ lập phương án chờ admin phê duyệt; sau khi được duyệt mới lưu phân công và thông báo cho người đăng ký tham dự."],
-                ["KH-07", "Hãy đề xuất phân công cán bộ và báo cáo viên cho hội nghị HN-0001?"],
-                ["KH-08", "Lập kế hoạch dời lịch đối với Hội nghị HN-0001."]
+                ["KH-07", "Lập kế hoạch dời lịch đối với Hội nghị HN-0001."]
             ]
         },
     ];
