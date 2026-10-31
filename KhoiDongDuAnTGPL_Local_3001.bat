@@ -4,6 +4,7 @@ title Khoi dong du an TGPL - Backend 3001 va giao dien 8080
 
 set "DATABASE_URL="
 set "DOTENV_CONFIG_PATH="
+set "NODE_ENV=development"
 set "HOST=127.0.0.1"
 set "TGPL_LAN_MODE=0"
 set "PORT=3001"
@@ -27,7 +28,7 @@ if errorlevel 1 (
 )
 
 echo Khoi dong backend khong chay migration...
-start "TGPL Backend 3001" /min cmd /k "cd /d D:\DuAnTGPL\backend && set PORT=3001&& npm start"
+start "TGPL Backend 3001" /min cmd /k "cd /d D:\DuAnTGPL\backend && set PORT=3001&& node src/server.js"
 
 set "BACKEND_READY="
 for /L %%i in (1,1,30) do (
@@ -42,7 +43,7 @@ exit /b 1
 
 :backend_ready
 echo Backend da san sang. Kiem tra giao dien 8080...
-powershell -NoProfile -Command "try { $null = Invoke-WebRequest -Uri 'http://127.0.0.1:8080/' -TimeoutSec 3; exit 0 } catch { exit 1 }"
+powershell -NoProfile -Command "try { $null = Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:8080/' -TimeoutSec 3; exit 0 } catch { exit 1 }"
 if errorlevel 1 (
     start "TGPL Giao dien 8080" /min cmd /k "cd /d D:\DuAnTGPL\hoinghitaphuandongnai && set PORT=8080&& npm start"
     timeout /t 3 /nobreak >nul

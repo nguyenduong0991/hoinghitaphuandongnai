@@ -937,18 +937,29 @@ router.post("/ai/conferences/:id/plan", requireRole("ADMIN"), async (req, res) =
         const requestedConflictEnd = requestedEnd > requestedStart ? requestedEnd : new Date(requestedStart.getTime() + durationMs);
         const approvedSameLocalityConflicts = findApprovedScheduleConflicts(requestedStart, requestedConflictEnd, conference.organization_id,
             approvedResult.rows.map(row => ({ code: row.code, title: row.title, organization_id: row.organization_id, organization_name: row.organization_name,
-                status: row.status, start: row.occupied_start, end: row.occupied_end })));        const occupiedIntervals = [];
+                status: row.status, start: row.occupied_start, end: row.occupied_end })));
+        const occupiedIntervals = [];
+        const reservedScheduleRows = approvedResult.rows.filter(row => row.status === "APPROVED" ||
+            (row.status === "RESCHEDULED" && ["PENDING", "ACCEPTED"].includes(row.reschedule_response)));
         const activeMonthlyCounts = new Map();
-        const sameOrganizationId = String(conference.organization_id || "");
         for (const row of approvedResult.rows) {
             const from = new Date(row.occupied_start);
             const to = new Date(row.occupied_end || row.occupied_start);
             if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime())) continue;
             const monthKey = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit" }).format(from);
             activeMonthlyCounts.set(monthKey, (activeMonthlyCounts.get(monthKey) || 0) + 1);
-            const scheduleConfirmed = row.status === "APPROVED" || (row.status === "RESCHEDULED" && row.reschedule_response === "ACCEPTED");
-            if (scheduleConfirmed && String(row.organization_id || "") === sameOrganizationId) {
-                occupiedIntervals.push({ start: from, end: to < from ? from : to });
+            // Any approved schedule or proposed reschedule reserves the whole
+            // local calendar day; a morning meeting also blocks the afternoon.
+            const scheduleReserved = row.status === "APPROVED" ||
+                (row.status === "RESCHEDULED" && ["PENDING", "ACCEPTED"].includes(row.reschedule_response));
+            if (scheduleReserved) {
+                const firstDay = new Date(`${dayKeyFor(from)}T00:00:00Z`);
+                const lastDay = new Date(`${dayKeyFor(to < from ? from : to)}T00:00:00Z`);
+                for (const day = new Date(firstDay); day <= lastDay; day.setUTCDate(day.getUTCDate() + 1)) {
+                    const localDay = day.toISOString().slice(0, 10);
+                    const dayStart = new Date(`${localDay}T00:00:00+07:00`);
+                    occupiedIntervals.push({ start: dayStart, end: new Date(dayStart.getTime() + 86400000) });
+                }
             }
         }
         occupiedIntervals.push(...draftConstraints.intervals);
@@ -1040,15 +1051,24 @@ router.post("/ai/conferences/:id/plan", requireRole("ADMIN"), async (req, res) =
         // A date already submitted by a commune is a fixed preference. Do not
         // silently move it because of the weekday filter, monthly planning cap,
         // or a staffing shortfall. Only an approved same-organization conflict
-        // or a live draft reservation can displace that requested slot.
+        // or a same-day approved/proposed schedule can displace that requested date.
         const requestedScheduleEnd = new Date(requestedStart.getTime() + durationMs);
+        const requestedDateCollision = overlapsTimeInterval(requestedStart, requestedScheduleEnd, occupiedIntervals);
+        const requestedDayKey = Number.isFinite(requestedStart.getTime()) ? dayKeyFor(requestedStart) : "";
+        const requestedDayScheduleConflicts = requestedDayKey ? reservedScheduleRows.filter(row => {
+            const from = new Date(row.occupied_start);
+            const to = new Date(row.occupied_end || row.occupied_start);
+            return Number.isFinite(from.getTime()) && Number.isFinite(to.getTime()) &&
+                dayKeyFor(from) <= requestedDayKey && dayKeyFor(to < from ? from : to) >= requestedDayKey;
+        }).map(row => ({ code: row.code, title: row.title, organization_name: row.organization_name,
+            status: row.status, start: row.occupied_start, end: row.occupied_end })) : [];
         const requestedScheduleCanStay = !forceReschedule && canKeepRequestedSchedule({
             start: requestedStart,
             end: requestedScheduleEnd,
             now,
             approvedConflicts: approvedSameLocalityConflicts,
             draftIntervals: draftConstraints.intervals
-        });
+        }) && !requestedDateCollision;
         const requestedDateCandidate = requestedScheduleCanStay ? (() => {
             const staffing = buildStaffingPlan(requestedStart);
             return {
@@ -1087,7 +1107,7 @@ router.post("/ai/conferences/:id/plan", requireRole("ADMIN"), async (req, res) =
                 remaining_capacity: Math.max(0, 15 - Number(activeMonthlyCounts.get(month) || 0)),
                 free_candidate_slots: Number(candidateSlotsByMonth.get(month) || 0),
                 weekdays_rejected_by_month_cap: Number(monthlyCapRejections.get(month) || 0),
-                slots_rejected_by_same_organization_schedule: Number(overlapRejections.get(month) || 0)
+                slots_rejected_by_reserved_schedule_day: Number(overlapRejections.get(month) || 0)
             })),
             returned_options: dateOptions.map(option => ({ date: dayKeyFor(option.start_time), complete_staffing: option.staffing_complete, shortage: option.staffing_shortage }))
         };
@@ -1119,10 +1139,10 @@ router.post("/ai/conferences/:id/plan", requireRole("ADMIN"), async (req, res) =
                 admin_options: ["Giữ ngày gần nhất và admin quyết định vị trí còn thiếu", "Chọn ngày gần nhất có cơ cấu đủ người", "Bổ sung/cử thêm cán bộ hoặc báo cáo viên đủ điều kiện"],
                 requires_admin_choice: true,
                 requested_reschedule: forceReschedule,
-                requires_reschedule: forceReschedule || approvedSameLocalityConflicts.length > 0,
+                requires_reschedule: forceReschedule || approvedSameLocalityConflicts.length > 0 || requestedDateCollision,
                 saved: false
             };
-            return res.json({ success: true, data: { plan: null, alternatives: [], evidence: { conference: { code: conference.code, title: conference.title, organization: conference.organization_name, requested_start: conference.start_time, requested_end: conference.end_time, status: conference.status }, available_dates: [], approved_same_locality_conflicts: approvedSameLocalityConflicts, available_staff_next_three_days: nextThreeDayAvailability, staffing_limits: PLANNING_LIMITS, schedule_diagnostics: scheduleDiagnostics }, staffing_resolution: staffingResolution, requires_admin_review: true, saved: false } });
+            return res.json({ success: true, data: { plan: null, alternatives: [], evidence: { conference: { code: conference.code, title: conference.title, organization: conference.organization_name, requested_start: conference.start_time, requested_end: conference.end_time, status: conference.status }, available_dates: [], approved_same_locality_conflicts: approvedSameLocalityConflicts, approved_same_day_schedule_conflicts: requestedDayScheduleConflicts, available_staff_next_three_days: nextThreeDayAvailability, staffing_limits: PLANNING_LIMITS, schedule_diagnostics: scheduleDiagnostics }, staffing_resolution: staffingResolution, requires_admin_review: true, saved: false } });
         }
         // Keep a short list in the response/prompt. Every listed option has already
         // passed the backend's full primary/backup and quota checks.
@@ -1148,6 +1168,7 @@ router.post("/ai/conferences/:id/plan", requireRole("ADMIN"), async (req, res) =
             },
             available_dates: dateOptions.map(({ staffing_plan, ...option }) => option),
             approved_same_locality_conflicts: approvedSameLocalityConflicts,
+            approved_same_day_schedule_conflicts: requestedDayScheduleConflicts,
             eligible_task_assignees: staff,
             eligible_speakers: speakerResult.rows,
             staffing_limits: PLANNING_LIMITS,
@@ -1176,7 +1197,7 @@ router.post("/ai/conferences/:id/plan", requireRole("ADMIN"), async (req, res) =
         const firstPrimaryStaff = firstStaffingPlan.staff.primary.slice(0, PLANNING_LIMITS.staffPrimary);
         const plan = {
             id: "P1", schedule_option_id: schedule.id,
-            schedule_reason: approvedSameLocalityConflicts.length ? `Yêu cầu bị trùng lịch với ${approvedSameLocalityConflicts.map(item => item.code).join(", ")} đã được phê duyệt tại cùng đơn vị; đề xuất chuyển sang ngày gần nhất còn lịch.` : requestedDateCandidate ? "Ưu tiên ngày giờ đơn vị đã đăng ký vì không trùng lịch đã duyệt cùng đơn vị. Tải nhân sự được rà riêng; vị trí thiếu cần admin quyết định." : forceReschedule ? `Theo yêu cầu dời lịch, đề xuất ngày gần nhất còn lịch sau lịch hiện tại: ${schedule.label}.` : `Ngày gần nhất còn lịch: ${schedule.label}. Lịch và trần tháng đã được kiểm tra; cơ cấu nhân sự ${isPlanningFullyStaffed(firstStaffingPlan, PLANNING_LIMITS) ? "đủ theo hạn mức" : "còn thiếu, xem tải toàn bộ nhân sự bên dưới"}.`,
+            schedule_reason: requestedDateCollision ? `Ngày yêu cầu đã có lịch hội nghị được giữ chỗ${requestedDayScheduleConflicts.length ? ` (${requestedDayScheduleConflicts.map(item => `${item.code}${item.organization_name ? ` · ${item.organization_name}` : ""}`).join(", ")})` : ""}; cả buổi sáng và buổi chiều đều bị loại, nên đề xuất ngày gần nhất còn lịch.` : approvedSameLocalityConflicts.length ? `Yêu cầu bị trùng lịch với ${approvedSameLocalityConflicts.map(item => item.code).join(", ")} đã được phê duyệt tại cùng đơn vị; đề xuất chuyển sang ngày gần nhất còn lịch.` : requestedDateCandidate ? "Ưu tiên ngày giờ đơn vị đã đăng ký vì ngày đó không có lịch hội nghị được giữ chỗ. Tải nhân sự được rà riêng; vị trí thiếu cần admin quyết định." : forceReschedule ? `Theo yêu cầu dời lịch, đề xuất ngày gần nhất còn lịch sau lịch hiện tại: ${schedule.label}.` : `Ngày gần nhất còn lịch: ${schedule.label}. Lịch ngày và trần tháng đã được kiểm tra; cơ cấu nhân sự ${isPlanningFullyStaffed(firstStaffingPlan, PLANNING_LIMITS) ? "đủ theo hạn mức" : "còn thiếu, xem tải toàn bộ nhân sự bên dưới"}.`,
             expected_attendees: Math.max(Number(conference.expected_participants || 0), Number(registrationResult.rows[0]?.count || 0) + Number(publicResult.rows[0]?.count || 0)),
             attendee_basis: "Quy mô đăng ký và dự kiến hiện có; admin xác nhận trước khi chốt.",
             staffing_plan: firstStaffingPlan,
@@ -1254,8 +1275,8 @@ router.post("/ai/conferences/:id/plan", requireRole("ADMIN"), async (req, res) =
             status: requestedDateCandidate
                 ? (firstOptionShortage.staff + firstOptionShortage.speakers > 0 ? "REQUESTED_DATE_STAFFING_REVIEW" : "REQUESTED_DATE_FEASIBLE")
                 : firstOptionShortage.staff + firstOptionShortage.speakers > 0 ? "ALTERNATIVE_DATE_STAFFING_REVIEW"
-                : forceReschedule ? "RESCHEDULE_PROPOSAL" : approvedSameLocalityConflicts.length ? "APPROVED_CONFERENCE_CONFLICT" : "ALTERNATIVE_DATE_REQUIRED",
-            requested_date: preferredKey, requested_reschedule: forceReschedule, approved_same_locality_conflicts: approvedSameLocalityConflicts, requires_reschedule: forceReschedule || approvedSameLocalityConflicts.length > 0, alternatives_require_admin_choice: true, saved: false,
+                : forceReschedule ? "RESCHEDULE_PROPOSAL" : (approvedSameLocalityConflicts.length || requestedDateCollision) ? "APPROVED_CONFERENCE_CONFLICT" : "ALTERNATIVE_DATE_REQUIRED",
+            requested_date: preferredKey, requested_reschedule: forceReschedule, approved_same_locality_conflicts: approvedSameLocalityConflicts, approved_same_day_schedule_conflicts: requestedDayScheduleConflicts, requires_reschedule: forceReschedule || approvedSameLocalityConflicts.length > 0 || requestedDateCollision, alternatives_require_admin_choice: true, saved: false,
             shortage: firstOptionShortage,
             schedule_diagnostics: scheduleDiagnostics,
             note: requestedDateCandidate ? "Ngày đăng ký được giữ làm phương án đầu nếu không trùng lịch đã duyệt cùng đơn vị; tải của toàn bộ nhân sự được hiển thị để admin quyết định, hệ thống không tự vượt hạn mức." : "Các phương án là những ngày gần nhất còn khung lịch; phương án thiếu người vẫn được hiển thị cùng tải nhân sự để admin quyết định.",
@@ -1589,6 +1610,22 @@ router.patch("/conferences/:id/public", requireRole("ADMIN"), async (req, res) =
         await client.query("ROLLBACK");
         throw error;
     } finally { client.release(); }
+});
+
+router.patch("/conferences/:id/description", requireRole("ADMIN"), async (req, res) => {
+    const description = String(req.body?.description || "").trim();
+    if (description.length > 4000) return res.status(400).json({ success: false, message: "Nội dung tối đa 4.000 ký tự." });
+    try {
+        const result = await pool.query(
+            "UPDATE conferences SET description=$1,updated_at=NOW() WHERE id::text=$2 OR UPPER(code)=UPPER($2) RETURNING id,code,description,is_public",
+            [description || null, String(req.params.id || "")]
+        );
+        if (!result.rowCount) return res.status(404).json({ success: false, message: "Không tìm thấy hội nghị." });
+        return res.json({ success: true, data: result.rows[0] });
+    } catch (error) {
+        console.error("Conference description update failed:", error?.message || error);
+        return res.status(500).json({ success: false, message: "Không thể cập nhật nội dung hội nghị." });
+    }
 });
 
 router.get("/conferences/:id/status-history", async (req, res) => {

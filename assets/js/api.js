@@ -349,6 +349,13 @@ async function updateConferencePublicVisibility(id, isPublic) {
     });
 }
 
+async function updateConferenceDescription(id, description) {
+    return apiRequest(`/conferences/${encodeURIComponent(id)}/description`, {
+        method: "PATCH",
+        body: JSON.stringify({ description })
+    });
+}
+
 async function getConferenceStatusHistory(id) {
     return apiRequest(`/conferences/${encodeURIComponent(id)}/status-history`);
 }

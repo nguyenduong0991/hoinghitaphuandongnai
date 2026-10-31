@@ -15,7 +15,7 @@
 
     <link
         rel="stylesheet"
-        href="assets/css/style.css?v=20261026-conference-list-full-width-5">
+        href="assets/css/style.css?v=20261031-ai-plan-calendar-1">
 </head>
 
 <body>
@@ -663,7 +663,7 @@
                         <div class="col-md-6"><small class="text-muted">Số người dự kiến</small><div>${escapeHtml(item.expected_participants ?? 0)}</div></div>
                         ${["ADMIN", "COMMUNE"].includes(currentUser?.role) ? `<div class="col-12" id="attendanceRegistrationsPanel"><section class="card border-info-subtle"><div class="card-header bg-info-subtle"><h5 class="h6 mb-0"><i class="bi bi-person-check me-2"></i>Đơn vị đăng ký tham gia</h5></div><div id="attendanceRegistrationsList" class="card-body"><span class="text-muted">Đang tải danh sách đăng ký…</span></div></section></div>` : ""}
                         ${currentUser?.role === "ADMIN" ? `<div class="col-12" id="publicAttendeesPanel"><section class="card border-success-subtle"><div class="card-header bg-success-subtle"><h5 class="h6 mb-0"><i class="bi bi-people me-2"></i>Người dân đăng ký tham dự</h5></div><div id="publicAttendeesList" class="card-body"><span class="text-muted">Đang tải danh sách…</span></div></section></div>` : ""}
-                        <div class="col-12"><small class="text-muted">Nội dung / mục đích</small><div>${escapeHtml(item.description || "Chưa cập nhật")}</div></div>
+                        <div class="col-12"><div class="d-flex flex-wrap gap-3 align-items-stretch"><section class="flex-grow-1" style="min-width:min(100%,420px)"><small class="text-muted">Nội dung / mục đích</small><div id="conferenceDescriptionDisplay" class="mt-1">${escapeHtml(item.description || "Chưa cập nhật")}</div></section>${currentUser?.role === "ADMIN" ? `<section class="conference-description-editor border rounded p-3 bg-light" aria-labelledby="conferenceDescriptionEditorTitle"><label id="conferenceDescriptionEditorTitle" for="conferenceDescriptionInput" class="form-label fw-semibold mb-2">Điều chỉnh nội dung công khai</label><textarea id="conferenceDescriptionInput" class="form-control" rows="4" maxlength="4000" placeholder="Nhập nội dung hoặc mục đích hội nghị...">${escapeHtml(item.description || "")}</textarea><div class="form-text">Nội dung này sẽ hiển thị cho người dân nếu hội nghị đang được công khai.</div><button id="saveConferenceDescription" type="button" class="btn btn-primary btn-sm mt-2">Lưu nội dung</button><span id="conferenceDescriptionMessage" class="small ms-2" role="status" aria-live="polite"></span></section>` : ""}</div></div>
                         <div class="col-12">
                             <small class="text-muted">Tệp đính kèm</small>
                             <div id="conferenceAttachments" class="mt-2"><span class="text-muted">Đang tải danh sách tệp...</span></div>
@@ -780,6 +780,20 @@
                 }
                 if (currentUser?.role === "ADMIN") {
                     document.getElementById("statusEdit").value = item.status || "PENDING";
+                    document.getElementById("saveConferenceDescription")?.addEventListener("click", async () => {
+                        const button = document.getElementById("saveConferenceDescription");
+                        const input = document.getElementById("conferenceDescriptionInput");
+                        const message = document.getElementById("conferenceDescriptionMessage");
+                        button.disabled = true; message.className = "small ms-2 text-muted"; message.textContent = "Đang lưu…";
+                        try {
+                            const updated = await updateConferenceDescription(item.id, input.value);
+                            item.description = updated.data?.description || "";
+                            document.getElementById("conferenceDescriptionDisplay").textContent = item.description || "Chưa cập nhật";
+                            message.className = "small ms-2 text-success"; message.textContent = item.is_public ? "Đã lưu và cập nhật nội dung hiển thị công khai." : "Đã lưu nội dung hội nghị.";
+                        } catch (error) {
+                            message.className = "small ms-2 text-danger"; message.textContent = error.message || "Không lưu được nội dung.";
+                        } finally { button.disabled = false; }
+                    });
                     const localDateTimeValue = value => {
                         if (!value) return "";
                         const date = new Date(value);
@@ -877,12 +891,18 @@
                 };
                 const dateOptions = evidence.available_dates || [];
                 const selectedDate = dateOptions.find(item => item.id === activePlan.schedule_option_id) || dateOptions[0];
+                const calendarDateKey = value => {
+                    const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date(value));
+                    const get = type => parts.find(item => item.type === type)?.value || "";
+                    return `${get("year")}-${get("month")}-${get("day")}`;
+                };
+                let calendarMonth = selectedDate ? calendarDateKey(selectedDate.start_time).slice(0, 7) : "";
                 container.innerHTML = `
                     <div class="alert alert-info py-2"><strong>Bản nháp cần admin duyệt.</strong> ${staffingResolution?.status === "REQUESTED_DATE_STAFFING_REVIEW" ? "Ngày giờ đơn vị đăng ký được giữ ưu tiên vì không trùng lịch đã duyệt cùng đơn vị. Cơ cấu nhân sự còn thiếu được nêu rõ bên dưới để admin quyết định; không tự vượt hạn mức. " : staffingResolution?.status === "REQUESTED_DATE_FEASIBLE" ? "Ngày giờ đơn vị đăng ký được giữ ưu tiên và đã đủ cơ cấu nhân sự theo hạn mức. " : staffingResolution?.status === "ALTERNATIVE_DATE_STAFFING_REVIEW" ? "Đây là các ngày gần nhất còn khung lịch; phương án thiếu người vẫn được đưa ra kèm tải của toàn bộ nhân sự để admin quyết định. " : staffingResolution?.status === "ALTERNATIVE_DATE_REQUIRED" ? "Ngày yêu cầu không thể giữ; các ngày thay thế gần nhất được rà theo lịch và tải nhân sự. " : ""}Ngày thay thế đã qua kiểm tra lịch và trần 15 hội nghị/tháng; cơ cấu đủ người được nêu riêng, không tự vượt hạn mức. Quy mô người tham dự là dự kiến, cần xác nhận với đơn vị.</div>
-                    ${staffingResolution?.schedule_diagnostics?.months?.length ? `<details class="small mb-3"><summary>Rà soát số hội nghị và khung lịch theo tháng</summary><ul class="mb-0 mt-1">${staffingResolution.schedule_diagnostics.months.map(item => `<li>${escapeHtml(item.month)}: ${Number(item.active_conferences || 0)}/${Number(staffingResolution.schedule_diagnostics.monthly_limit || 15)} hồ sơ đang hoạt động; còn ${Number(item.remaining_capacity || 0)} suất; ${Number(item.free_candidate_slots || 0)} khung giờ không trùng lịch cùng đơn vị; ${Number(item.weekdays_rejected_by_month_cap || 0)} ngày làm việc bị loại do trần tháng.</li>`).join("")}</ul></details>` : ""}
+                    ${staffingResolution?.schedule_diagnostics?.months?.length ? `<details class="small mb-3"><summary>Rà soát hạn mức và khung giờ ứng viên theo tháng</summary><ul class="mb-0 mt-1">${staffingResolution.schedule_diagnostics.months.map(item => `<li>${escapeHtml(item.month)}: ${Number(item.active_conferences || 0)}/${Number(staffingResolution.schedule_diagnostics.monthly_limit || 15)} hồ sơ đang hoạt động; còn tối đa ${Number(item.remaining_capacity || 0)} hồ sơ theo hạn mức; ${Number(item.free_candidate_slots || 0)} lựa chọn khung giờ cho một hồ sơ mới, sau khi loại cả ngày có lịch đã duyệt hoặc lịch dời đang chờ/đã chấp thuận; ${Number(item.weekdays_rejected_by_month_cap || 0)} ngày làm việc bị loại do đã chạm trần tháng.</li>`).join("")}</ul><div class="form-text mt-2">“Còn suất” là số hội nghị tối đa hệ thống có thể nhận thêm trong tháng; “lựa chọn khung giờ” là phương án thời gian cho từng hồ sơ. Nếu một ngày có hội nghị đã duyệt hoặc đề xuất dời đang chờ/đã chấp thuận, hệ thống loại cả ngày đó, gồm cả buổi sáng và chiều. Chỉ số chưa loại ngày nghỉ lễ và chưa xác nhận địa điểm hoặc nhân sự.</div></details>` : ""}
                     ${alternatives.length > 1 ? `<div class="mb-3"><label class="form-label fw-semibold" for="aiPlanAlternative">Phương án tổ chức và phân công</label><select id="aiPlanAlternative" class="form-select">${alternatives.map((item, index) => `<option value="${index}">${escapeHtml(item.label || `Phương án ${index + 1}`)}</option>`).join("")}</select><div class="form-text">Các lựa chọn phân bổ nhiệm vụ theo tải công việc và thay đổi ngày/báo cáo viên; chọn phương án để xem chi tiết.</div></div>` : ""}
                     <div class="row g-3 mb-3">
-                        <div class="col-md-6"><div class="form-label fw-semibold">Ngày và giờ đề xuất</div><div id="aiPlanDateOption" class="form-control bg-light" aria-live="polite">${escapeHtml(selectedDate?.label || "Chưa có khung giờ")}</div><div id="aiPlanScheduleReason" class="form-text">${escapeHtml(activePlan.schedule_reason || "Khung giờ đã được hệ thống kiểm tra.")}</div></div>
+                        <div class="col-md-6"><div class="form-label fw-semibold">Ngày và giờ đề xuất</div><div id="aiPlanDateOption" class="form-control bg-light" aria-live="polite">${escapeHtml(selectedDate?.label || "Chưa có khung giờ")}</div><div id="aiPlanScheduleReason" class="form-text">${escapeHtml(activePlan.schedule_reason || "Khung giờ đã được hệ thống kiểm tra.")}</div><section class="ai-plan-calendar mt-3" aria-label="Lịch chọn ngày còn khung giờ"><div class="d-flex align-items-center justify-content-between gap-2 mb-2"><button type="button" class="btn btn-sm btn-outline-secondary" id="aiPlanCalendarPrev" aria-label="Tháng trước">‹</button><strong id="aiPlanCalendarMonth"></strong><button type="button" class="btn btn-sm btn-outline-secondary" id="aiPlanCalendarNext" aria-label="Tháng sau">›</button></div><div class="ai-plan-calendar-grid ai-plan-calendar-weekdays" aria-hidden="true"><span>CN</span><span>T2</span><span>T3</span><span>T4</span><span>T5</span><span>T6</span><span>T7</span></div><div id="aiPlanCalendarDays" class="ai-plan-calendar-grid"></div><div class="small text-muted mt-2"><span class="ai-calendar-legend"></span> Ngày có khung giờ được hệ thống kiểm tra; bấm ngày để chọn. Ngày khác chưa được đề xuất.</div><div id="aiPlanCalendarSlots" class="d-flex flex-wrap gap-2 mt-2" aria-live="polite"></div></section></div>
                         <div class="col-md-6"><div class="fw-semibold">Quy mô tham dự dự kiến</div><div class="fs-4">${Number(plan.expected_attendees || 0).toLocaleString("vi-VN")} người</div><div class="form-text">${escapeHtml(plan.attendee_basis || "Ước tính từ hồ sơ hội nghị và đăng ký hiện có.")}</div><div class="small text-muted">Đơn vị đăng ký: ${Number(evidence.attendance?.registered_organizations || 0)} · Số người đơn vị đăng ký: ${Number(evidence.attendance?.estimated_people_from_units || 0)} · Người dân đăng ký: ${Number(evidence.attendance?.public_residents_registered || 0)}</div></div>
                     </div>
                     <h6>Phân công nhân sự theo hạn mức</h6>
@@ -900,10 +920,77 @@
                     <div id="aiPlanTasks" class="vstack gap-2 mb-3"></div>
                     <div id="aiPlanNotes"></div>`;
 
+                const renderPlanCalendar = selected => {
+                    const daysHost = document.getElementById("aiPlanCalendarDays");
+                    const monthLabel = document.getElementById("aiPlanCalendarMonth");
+                    const slotsHost = document.getElementById("aiPlanCalendarSlots");
+                    if (!daysHost || !monthLabel || !slotsHost) return;
+                    const monthKeys = [...new Set(dateOptions.map(option => calendarDateKey(option.start_time).slice(0, 7)))].sort();
+                    if (!calendarMonth && monthKeys.length) calendarMonth = monthKeys[0];
+                    const monthIndex = monthKeys.indexOf(calendarMonth);
+                    const [year, month] = (calendarMonth || "").split("-").map(Number);
+                    daysHost.replaceChildren(); slotsHost.replaceChildren();
+                    if (!year || !month) { monthLabel.textContent = "Chưa có ngày khả dụng"; return; }
+                    monthLabel.textContent = new Intl.DateTimeFormat("vi-VN", { month: "long", year: "numeric", timeZone: "Asia/Ho_Chi_Minh" }).format(new Date(Date.UTC(year, month - 1, 15)));
+                    const availableByDay = new Map();
+                    dateOptions.forEach(option => {
+                        const key = calendarDateKey(option.start_time);
+                        if (!availableByDay.has(key)) availableByDay.set(key, []);
+                        availableByDay.get(key).push(option);
+                    });
+                    const firstWeekday = new Date(Date.UTC(year, month - 1, 1)).getUTCDay();
+                    for (let i = 0; i < firstWeekday; i++) { const spacer = document.createElement("span"); spacer.className = "ai-calendar-empty"; daysHost.appendChild(spacer); }
+                    const dayCount = new Date(Date.UTC(year, month, 0)).getUTCDate();
+                    for (let day = 1; day <= dayCount; day++) {
+                        const key = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+                        const options = availableByDay.get(key) || [];
+                        const dayCell = document.createElement(options.length ? "button" : "span");
+                        dayCell.textContent = String(day);
+                        dayCell.className = `ai-calendar-day${options.length ? " is-available" : ""}${selected && calendarDateKey(selected.start_time) === key ? " is-selected" : ""}`;
+                        if (options.length) {
+                            dayCell.type = "button";
+                            dayCell.title = `${options.length} khung giờ đã được kiểm tra`;
+                            dayCell.setAttribute("aria-label", `${day}/${month}/${year}, ${options.length} khung giờ khả dụng`);
+                            dayCell.addEventListener("click", () => {
+                                calendarMonth = key.slice(0, 7);
+                                const option = options.find(item => item.id === activePlan.schedule_option_id) || options[0];
+                                const planIndex = alternatives.findIndex(item => item.schedule_option_id === option.id);
+                                if (planIndex >= 0) {
+                                    activePlan = alternatives[planIndex];
+                                    const selector = document.getElementById("aiPlanAlternative");
+                                    if (selector) selector.value = String(planIndex);
+                                    renderActivePlan();
+                                }
+                            });
+                        }
+                        daysHost.appendChild(dayCell);
+                    }
+                    document.getElementById("aiPlanCalendarPrev").disabled = monthIndex <= 0;
+                    document.getElementById("aiPlanCalendarNext").disabled = monthIndex < 0 || monthIndex >= monthKeys.length - 1;
+                    document.getElementById("aiPlanCalendarPrev").onclick = () => { if (monthIndex > 0) { calendarMonth = monthKeys[monthIndex - 1]; renderPlanCalendar(null); } };
+                    document.getElementById("aiPlanCalendarNext").onclick = () => { if (monthIndex >= 0 && monthIndex < monthKeys.length - 1) { calendarMonth = monthKeys[monthIndex + 1]; renderPlanCalendar(null); } };
+                    const selectedDay = selected ? calendarDateKey(selected.start_time) : "";
+                    (availableByDay.get(selectedDay) || []).forEach(option => {
+                        const slotButton = document.createElement("button");
+                        slotButton.type = "button";
+                        slotButton.className = `btn btn-sm ${option.id === activePlan.schedule_option_id ? "btn-primary" : "btn-outline-primary"}`;
+                        slotButton.textContent = option.label;
+                        slotButton.addEventListener("click", () => {
+                            const planIndex = alternatives.findIndex(item => item.schedule_option_id === option.id);
+                            if (planIndex < 0) return;
+                            activePlan = alternatives[planIndex];
+                            const selector = document.getElementById("aiPlanAlternative");
+                            if (selector) selector.value = String(planIndex);
+                            renderActivePlan();
+                        });
+                        slotsHost.appendChild(slotButton);
+                    });
+                };
                 const renderActivePlan = () => {
                     const date = dateOptions.find(item => item.id === activePlan.schedule_option_id) || dateOptions[0];
                     document.getElementById("aiPlanDateOption").textContent = date?.label || "Chưa có khung giờ";
                     document.getElementById("aiPlanScheduleReason").textContent = activePlan.schedule_reason || "Khung giờ đã được hệ thống kiểm tra.";
+                    renderPlanCalendar(date);
                     const staffing = activePlan.staffing_plan || {};
                     const staffingBox = document.getElementById("aiPlanStaffing");
                     staffingBox.replaceChildren();
@@ -987,6 +1074,8 @@
                 renderActivePlan();
                 document.getElementById("aiPlanAlternative")?.addEventListener("change", event => {
                     activePlan = alternatives[Number(event.target.value)] || alternatives[0];
+                    const selectedOption = dateOptions.find(item => item.id === activePlan.schedule_option_id);
+                    if (selectedOption) calendarMonth = calendarDateKey(selectedOption.start_time).slice(0, 7);
                     renderActivePlan();
                 });
 

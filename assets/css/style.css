@@ -331,3 +331,12 @@ body {
     .deadline-reminder-item { grid-template-columns: minmax(0, 1fr); gap: .4rem; }
     .deadline-reminder-link { justify-self: start; }
 }
+.ai-plan-calendar{max-width:360px;padding:.75rem;border:1px solid #d9e2ef;border-radius:.75rem;background:#fff;box-shadow:0 4px 14px rgba(20,50,90,.06)}
+.ai-plan-calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(2rem,1fr));gap:.25rem;text-align:center}
+.ai-plan-calendar-weekdays{font-size:.72rem;color:#6c757d;font-weight:700;margin-bottom:.25rem}
+.ai-calendar-empty,.ai-calendar-day{height:2rem;display:flex;align-items:center;justify-content:center;border-radius:.5rem}
+.ai-calendar-day{border:0;background:transparent;color:#64748b;font-size:.85rem}
+.ai-calendar-day.is-available{background:#d9f5e5;color:#126b3a;font-weight:700;cursor:pointer;box-shadow:inset 0 0 0 1px #a8e4bf}
+.ai-calendar-day.is-available:hover{background:#b9edcd}
+.ai-calendar-day.is-selected{background:#0d6efd;color:#fff;box-shadow:0 0 0 2px #b6d4fe}
+.ai-calendar-legend{display:inline-block;width:.7rem;height:.7rem;border-radius:50%;background:#d9f5e5;border:1px solid #a8e4bf;vertical-align:middle}

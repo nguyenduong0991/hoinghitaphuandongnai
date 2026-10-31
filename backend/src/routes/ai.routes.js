@@ -528,6 +528,18 @@ async function loadTaskAnswer(user, question) {
             ORDER BY a.due_at NULLS LAST,c.start_time
             LIMIT 100`, [user.role,user.id,horizonDays,asksOverdue,asksProgress,requestedPeriod?.from || null,requestedPeriod?.to || null,asksCompleted,asksUncompleted,asksInProgress,requestedAssigneeId])
         : { rows: [] };
+    const legacyCompletedRows = asksCompleted && requestedPeriod && ["ADMIN", "TASK_ASSIGNEE"].includes(user.role)
+        ? await pool.query(`SELECT a.title,a.due_at,c.code,c.title AS conference_title,
+                COALESCE(NULLIF(u.full_name,''),NULLIF(a.assignee_name,'')) AS assignee_display_name
+            FROM conference_task_assignments a
+            JOIN conferences c ON c.id=a.conference_id
+            LEFT JOIN users u ON u.id=a.assignee_user_id
+            WHERE a.status='COMPLETED' AND a.completed_at IS NULL
+              AND ($1::text='ADMIN' OR a.assignee_user_id=$2::uuid)
+              AND ($3::uuid IS NULL OR a.assignee_user_id=$3::uuid)
+            ORDER BY a.due_at NULLS LAST,a.created_at
+            LIMIT 20`, [user.role,user.id,requestedAssigneeId])
+        : { rows: [] };
     const speakerRows = !asksToday && !asksOverdue && !asksUncompleted && !asksCompleted && ["ADMIN", "SPEAKER"].includes(user.role)
         ? await pool.query(`SELECT s.presentation_title AS title,s.full_name,c.code,c.title AS conference_title,
                 c.start_time AS due_at,c.location_name,o.name AS organization_name
@@ -551,9 +563,11 @@ async function loadTaskAnswer(user, question) {
     ];
     if (!lines.length) {
         if (asksCompleted && requestedPeriod) {
-            const legacy = await pool.query(`SELECT COUNT(*)::int AS count FROM conference_task_assignments a
-                WHERE a.status='COMPLETED' AND a.completed_at IS NULL AND ($1::text='ADMIN' OR a.assignee_user_id=$2::uuid)`, [user.role,user.id]);
-            if (legacy.rows[0]?.count) return `Chưa thể xác định đầy đủ nhiệm vụ nào hoàn thành trong ${requestedPeriod.label}: hiện không có bản ghi nào có thời điểm hoàn thành được lưu trong kỳ. Có ${legacy.rows[0].count} nhiệm vụ đang ở trạng thái hoàn thành nhưng thiếu mốc hoàn thành; không thể xác nhận chúng thuộc kỳ này chỉ dựa vào hạn công việc.`;
+            if (legacyCompletedRows.rowCount) {
+                const unknown = legacyCompletedRows.rows.map(row => `• ${row.title} — hội nghị ${row.code} ${row.conference_title}${user.role === "ADMIN" ? `; người nhận ${row.assignee_display_name || "chưa rõ"}` : ""}; hạn công việc ${row.due_at ? formatAiDate(row.due_at) : "không có"}; ngày hoàn thành chưa được lưu.`).join("\n");
+                const more = legacyCompletedRows.rowCount === 20 ? "\nDanh sách hiển thị tối đa 20 nhiệm vụ." : "";
+                return `Không có nhiệm vụ nào xác nhận được đã hoàn thành trong ${requestedPeriod.label}, vì không có mốc hoàn thành được lưu trong kỳ. Có ${legacyCompletedRows.rowCount} nhiệm vụ đang ở trạng thái hoàn thành nhưng thiếu ngày hoàn thành nên chưa thể xác định chúng có thuộc kỳ này hay không:\n${unknown}${more}\nLưu ý: hạn công việc không thay thế cho thời điểm hoàn thành.`;
+            }
             return `Không tìm thấy nhiệm vụ được ghi nhận hoàn thành trong ${requestedPeriod.label}, trong phạm vi dữ liệu và quyền xem của tài khoản này.`;
         }
         if (asksToday) return "Không có nhiệm vụ đến hạn hôm nay trong phạm vi dữ liệu và quyền xem của tài khoản này.";
@@ -571,9 +585,7 @@ async function loadTaskAnswer(user, question) {
     if (asksInProgress) return `Nhiệm vụ đang thực hiện${periodLabel} (${taskRows.rows.length} mục):`
         + (lines.length ? `\n${lines.join("\n")}` : "\nKhông có nhiệm vụ ở trạng thái đang thực hiện trong kỳ này.");
     if (asksCompleted) {
-        const legacy = await pool.query(`SELECT COUNT(*)::int AS count FROM conference_task_assignments a
-            WHERE a.status='COMPLETED' AND a.completed_at IS NULL AND ($1::text='ADMIN' OR a.assignee_user_id=$2::uuid)`, [user.role,user.id]);
-        const legacyNote = legacy.rows[0]?.count ? `\nNgoài danh sách trên, còn ${legacy.rows[0].count} nhiệm vụ đã hoàn thành nhưng thiếu thời điểm hoàn thành; chưa xác định được chúng có thuộc kỳ này hay không.` : "";
+        const legacyNote = legacyCompletedRows.rowCount ? `\n\nNhiệm vụ hoàn thành nhưng chưa xác định được kỳ (thiếu thời điểm hoàn thành):\n${legacyCompletedRows.rows.map(row => `• ${row.title} — hội nghị ${row.code} ${row.conference_title}${user.role === "ADMIN" ? `; người nhận ${row.assignee_display_name || "chưa rõ"}` : ""}; hạn công việc ${row.due_at ? formatAiDate(row.due_at) : "không có"}.`).join("\n")}\nHạn công việc không thay thế cho thời điểm hoàn thành.` : "";
         return `Nhiệm vụ được ghi nhận hoàn thành${periodLabel} (${taskRows.rows.length} mục):\n${lines.join("\n")}${legacyNote}`;
     }    if (asksOverdue) return `Nhiệm vụ quá hạn chưa hoàn thành (${lines.length}${lines.length === 12 ? ", tối đa 12 mục" : " mục"}):\n${lines.join("\n")}`;
     if (asksUncompleted) return `Nhiệm vụ chưa hoàn thành${periodLabel} (${taskRows.rows.length} mục):\n${lines.join("\n")}`;

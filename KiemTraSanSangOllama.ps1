@@ -5,12 +5,26 @@ $model = if ($env:OLLAMA_MODEL) { $env:OLLAMA_MODEL } else { "qwen3:4b-instruct"
 try {
     $tags = Invoke-RestMethod -Uri "$baseUrl/api/tags" -TimeoutSec 5
 } catch {
-    $ollama = Get-Command ollama -ErrorAction SilentlyContinue
-    if (-not $ollama) {
-        Write-Error "Khong tim thay dich vu Ollama va khong tim thay lenh ollama."
+    $ollamaCommand = Get-Command ollama.exe,ollama -ErrorAction SilentlyContinue | Select-Object -First 1
+    $ollamaPath = if ($ollamaCommand) { $ollamaCommand.Source } else { $null }
+    if (-not $ollamaPath) {
+        $candidates = @(
+            (Join-Path $env:LOCALAPPDATA "Programs\Ollama\ollama.exe"),
+            (Join-Path $env:ProgramFiles "Ollama\ollama.exe")
+        )
+        $ollamaPath = $candidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    }
+    if (-not $ollamaPath) {
+        Write-Error "Khong tim thay ollama.exe trong PATH hoac thu muc cai dat mac dinh."
         exit 1
     }
-    Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "ollama serve" -WindowStyle Hidden
+
+    try {
+        Start-Process -FilePath $ollamaPath -ArgumentList "serve" -WindowStyle Hidden | Out-Null
+    } catch {
+        Write-Error "Khong the khoi dong Ollama API bang ollama.exe: $($_.Exception.Message)"
+        exit 1
+    }
     $tags = $null
     for ($i = 0; $i -lt 30 -and -not $tags; $i++) {
         Start-Sleep -Seconds 2
