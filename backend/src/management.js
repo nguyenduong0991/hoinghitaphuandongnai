@@ -2073,13 +2073,14 @@ router.get("/my-assignments", requireRole("TASK_ASSIGNEE", "SPEAKER"), async (re
                 o.name AS organization_name
             FROM conference_task_assignments a JOIN conferences c ON c.id=a.conference_id
             LEFT JOIN organizations o ON o.id=c.organization_id
-            WHERE a.status<>'CANCELLED' ORDER BY c.start_time,a.due_at NULLS LAST,a.created_at`),
+            WHERE a.status<>'CANCELLED' AND a.assignee_user_id=$1 ORDER BY c.start_time,a.due_at NULLS LAST,a.created_at`, [req.user.id]),
         pool.query(`SELECT s.id,s.conference_id,s.speaker_user_id,s.full_name,s.organization,s.role_title,s.presentation_title,s.speaking_order,s.duration_minutes,s.notes,
                 c.code AS conference_code,c.title AS conference_title,c.start_time,c.end_time,c.status AS conference_status,c.location_name,c.location_address,
                 o.name AS organization_name
             FROM conference_speakers s JOIN conferences c ON c.id=s.conference_id
             LEFT JOIN organizations o ON o.id=c.organization_id
-            ORDER BY c.start_time,s.speaking_order,s.created_at`)
+            WHERE s.speaker_user_id=$1
+            ORDER BY c.start_time,s.speaking_order,s.created_at`, [req.user.id])
     ]);
     res.json({ success: true, data: { tasks: tasks.rows, speakers: speakers.rows } });
 });
@@ -2135,10 +2136,10 @@ router.patch("/my-assignments/tasks/:id/status", requireRole("TASK_ASSIGNEE"), a
                 return res.status(409).json({ success: false, message: "Chưa thể hoàn thành nhiệm vụ khi đề nghị đổi cán bộ đang chờ admin xử lý." });
             }
         }
-        const result = await client.query(`UPDATE conference_task_assignments SET status=$1,
-                completed_at=CASE WHEN $1='COMPLETED' THEN COALESCE(completed_at,$4,NOW()) ELSE NULL END,
+        const result = await client.query(`UPDATE conference_task_assignments SET status=$1::varchar,
+                completed_at=CASE WHEN $1::varchar='COMPLETED' THEN COALESCE(completed_at,$4::timestamptz,NOW()) ELSE NULL END,
                 updated_at=NOW()
-            WHERE id=$2 AND assignee_user_id=$3 AND (status IN ('ASSIGNED','IN_PROGRESS') OR (status='COMPLETED' AND completed_at IS NULL AND $4 IS NOT NULL)) RETURNING id,status,completed_at,updated_at`, [status,req.params.id,req.user.id,suppliedCompletion?.toISOString() || null]);
+            WHERE id=$2 AND assignee_user_id=$3 AND (status IN ('ASSIGNED','IN_PROGRESS') OR (status='COMPLETED' AND completed_at IS NULL AND $4::timestamptz IS NOT NULL)) RETURNING id,status,completed_at,updated_at`, [status,req.params.id,req.user.id,suppliedCompletion?.toISOString() || null]);
         await client.query("COMMIT");
         res.json({ success: true, data: result.rows[0] });
     } catch (error) {

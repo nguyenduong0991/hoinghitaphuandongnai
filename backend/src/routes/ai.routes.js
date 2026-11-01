@@ -1703,6 +1703,67 @@ async function prepareChat(req) {
     const question = String(req.body?.question || "").trim();
     if (question.length < 3) return { error: "Vui lòng nhập câu hỏi từ 3 ký tự trở lên." };
     if (question.length > 4000) return { error: "Câu hỏi không được vượt quá 4.000 ký tự." };
+    // An explicit conference code plus a collaborator/assignee question is a
+    // scoped record lookup. Resolve it before inherited report context can ask
+    // for an unrelated time period.
+    const collaboratorQuestion = normalize(question);
+    const collaboratorCode = question.match(/\b(hn|hcn|conf)[\s_-]*(\d{2,})\b/i);
+    const asksCollaborators = /(?:ai la nguoi.{0,35}phoi hop|ai.{0,35}phoi hop|nguoi phoi hop|dong nghiep|nhung ai.{0,30}cung.{0,25}nhiem vu)/.test(collaboratorQuestion) &&
+        /(?:nhiem vu|phan cong|hoi nghi)/.test(collaboratorQuestion);
+    if (collaboratorCode && asksCollaborators) {
+        const code = `${collaboratorCode[1].toUpperCase()}-${collaboratorCode[2].padStart(4, "0")}`;
+        const user = req.user;
+        if (!user?.id || !["ADMIN", "TASK_ASSIGNEE", "SPEAKER"].includes(user.role)) {
+            return { question, mode: "fast", rag: { used: true, topK: 0, database: true, method: "scoped_sql_conference_collaborators", semantic: false, complexity: "simple" }, sources: [],
+                directAnswer: "Không có dữ liệu người phối hợp trong phạm vi tài khoản được phép xem.", messages: [] };
+        }
+        try {
+            const result = await pool.query(`SELECT c.code,c.title,a.assignee_user_id,
+                    a.title AS task_title,
+                    COALESCE(NULLIF(a.assignee_name,''),u.full_name) AS assignee_name
+                FROM conferences c
+                LEFT JOIN conference_task_assignments a ON a.conference_id=c.id AND a.status<>'CANCELLED'
+                    AND ($2::text='ADMIN' OR ($2::text='TASK_ASSIGNEE' AND a.assignee_user_id=$3::uuid))
+                LEFT JOIN users u ON u.id=a.assignee_user_id
+                WHERE UPPER(c.code)=$1 AND (
+                    $2::text='ADMIN'
+                    OR ($2::text='TASK_ASSIGNEE' AND EXISTS (
+                        SELECT 1 FROM conference_task_assignments own
+                        WHERE own.conference_id=c.id AND own.assignee_user_id=$3::uuid AND own.status<>'CANCELLED'
+                    ))
+                    OR ($2::text='SPEAKER' AND EXISTS (
+                        SELECT 1 FROM conference_speakers own
+                        WHERE own.conference_id=c.id AND own.speaker_user_id=$3::uuid
+                    ))
+                )
+                ORDER BY a.created_at,a.title`, [code,user.role,user.id]);
+            if (!result.rowCount) {
+                return { question, mode: "fast", rag: { used: true, topK: 0, database: true, method: "scoped_sql_conference_collaborators", semantic: false, complexity: "simple" }, sources: [],
+                    directAnswer: `Không tìm thấy hội nghị mã ${code} trong phạm vi dữ liệu tài khoản được phép xem.`, messages: [] };
+            }
+            if (user.role !== "ADMIN") {
+                const ownRows = user.role === "TASK_ASSIGNEE"
+                    ? result.rows.filter(row => String(row.assignee_user_id) === String(user.id))
+                    : [];
+                const ownTaskText = ownRows.length
+                    ? ` Nhiệm vụ của bạn được ghi nhận: ${[...new Set(ownRows.map(row => row.task_title).filter(Boolean))].join(", ")}.`
+                    : "";
+                return { question, mode: "fast", rag: { used: true, topK: 0, database: true, method: "scoped_sql_conference_collaborators", semantic: false, complexity: "simple" }, sources: [],
+                    directAnswer: `Hệ thống ghi nhận nhiệm vụ được giao nhưng không có trường xác nhận quan hệ “người phối hợp”; theo quyền tài khoản này, chatbot không hiển thị tên người được giao khác.${ownTaskText}`, messages: [] };
+            }
+            const people = [...new Map(result.rows
+                .filter(row => row.assignee_name)
+                .map(row => [row.assignee_name, { name: row.assignee_name, task: row.task_title }])).values()];
+            const directAnswer = people.length
+                ? `${result.rows[0].code} – ${result.rows[0].title}. Người được phân công có thể phối hợp: ${people.map(person => `${person.name}${person.task ? ` (${person.task})` : ""}`).join("; ")}. Hệ thống không lưu quan hệ phối hợp riêng, nên đây là danh sách người được giao nhiệm vụ, không khẳng định họ cùng một nhiệm vụ.`
+                : `${code}: chưa có người được phân công trong dữ liệu hiện có.`;
+            return { question, mode: "fast", rag: { used: true, topK: 0, database: true, method: "scoped_sql_conference_collaborators", semantic: false, complexity: "simple" }, sources: [], directAnswer, messages: [] };
+        } catch (error) {
+            console.error("AI conference collaborator lookup failed:", error.message);
+            return { question, mode: "fast", rag: { used: true, topK: 0, database: true, method: "scoped_sql_conference_collaborators", semantic: false, complexity: "simple" }, sources: [],
+                directAnswer: "Hiện chưa tra cứu được người được phân công cho hội nghị trong phạm vi tài khoản. Vui lòng thử lại sau.", messages: [] };
+        }
+    }
     // Deterministic contact-request intents bypass generic classification and all Ollama calls.
     const contactIntent = classifyQuestion(question);
     if (contactIntent.isContactRequestSummaryQuestion) {

@@ -25,8 +25,20 @@
         </div>
     </div></nav>
     <main class="container py-4">
-        <div class="mb-4"><h2 id="welcome">Nhiệm vụ và lịch báo cáo viên</h2><p class="text-muted mb-0">Danh sách phân công dùng chung cho người nhận nhiệm vụ và báo cáo viên. Thông tin liên hệ cá nhân không hiển thị tại đây.</p></div>
+        <div class="mb-4"><h2 id="welcome">Nhiệm vụ và lịch báo cáo viên</h2><p class="text-muted mb-0">Tra cứu các nhiệm vụ hoặc lịch báo cáo viên được phân công cho tài khoản đang đăng nhập.</p></div>
         <div id="chatTestLibraryMount" class="mb-4"></div>
+        <section class="card mb-4" aria-labelledby="assignmentLookupTitle">
+            <div class="card-header d-flex justify-content-between align-items-center"><strong id="assignmentLookupTitle">Tra cứu nhiệm vụ và lịch công tác</strong><span id="assignmentLookupCount" class="badge text-bg-primary">0 kết quả</span></div>
+            <div class="card-body">
+                <div class="row g-2 align-items-end">
+                    <div class="col-12 col-lg-6"><label for="assignmentLookupQuery" class="form-label">Tìm theo mã hội nghị, nhiệm vụ hoặc chuyên đề</label><input id="assignmentLookupQuery" class="form-control" type="search" placeholder="Ví dụ: HN-0021, chuẩn bị tài liệu, Luật Trợ giúp pháp lý" autocomplete="off"></div>
+                    <div class="col-6 col-lg-3"><label for="assignmentLookupType" class="form-label">Loại phân công</label><select id="assignmentLookupType" class="form-select"><option value="ALL">Tất cả</option><option value="TASK">Nhiệm vụ cán bộ</option><option value="SPEAKER">Lịch báo cáo viên</option></select></div>
+                    <div class="col-6 col-lg-3"><label for="assignmentLookupStatus" class="form-label">Trạng thái / thời gian</label><select id="assignmentLookupStatus" class="form-select"><option value="ALL">Tất cả</option><option value="ASSIGNED">Đã giao</option><option value="IN_PROGRESS">Đang thực hiện</option><option value="COMPLETED">Hoàn thành</option><option value="UPCOMING">Lịch sắp diễn ra</option><option value="PAST">Lịch đã diễn ra</option></select></div>
+                </div>
+                <p class="small text-muted mt-2 mb-2">Kết quả chỉ gồm phân công thuộc tài khoản này. Chọn “Xem trong danh sách” để tới hồ sơ chi tiết.</p>
+                <div id="assignmentLookupResults" class="mt-3" aria-live="polite"><span class="text-muted">Đang tải phân công…</span></div>
+            </div>
+        </section>
         <div id="message" class="alert alert-danger" hidden></div>
         <section id="publicAttendanceSection" class="card mb-4" hidden><div class="card-header d-flex justify-content-between align-items-center"><strong>Danh sách người dân đăng ký và điểm danh</strong><span id="publicAttendanceCount" class="badge text-bg-success">0</span></div><div id="publicAttendanceList" class="card-body"><span class="text-muted">Đang tải danh sách…</span></div></section>
         <section id="legalAidContactSection" class="card mb-4" hidden><div class="card-header d-flex justify-content-between align-items-center"><strong>Yêu cầu tư vấn được giao</strong><span id="legalAidContactCount" class="badge text-bg-info">0</span></div><div id="legalAidContactList" class="card-body"><span class="text-muted">Đang tải yêu cầu…</span></div></section>
@@ -42,9 +54,36 @@
     <script src="assets/js/chat-test-library.js?v=20261031-remove-hn0001-assignment-1"></script>
     <script>
         const currentUser = JSON.parse(localStorage.getItem("tgpl.user") || "null");
+        let myAssignmentLookupItems = [];
         const dateTime = value => value ? new Date(value).toLocaleString("vi-VN", { dateStyle: "medium", timeStyle: "short" }) : "Chưa xác định";
         function line(parent, text, className = "") { const div = document.createElement("div"); div.className = className; div.textContent = text; parent.appendChild(div); return div; }
         function conferenceInfo(item) { return `${item.conference_code || ""} · ${item.conference_title || "Hội nghị"} · ${item.organization_name || ""}`; }
+        function normalizeLookupText(value) { return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[đĐ]/g, "d").toLocaleLowerCase("vi-VN").trim(); }
+        function renderAssignmentLookup() {
+            const query = normalizeLookupText(document.getElementById("assignmentLookupQuery").value);
+            const type = document.getElementById("assignmentLookupType").value;
+            const status = document.getElementById("assignmentLookupStatus").value;
+            const rows = myAssignmentLookupItems.filter(item => {
+                if (type !== "ALL" && item.kind !== type) return false;
+                if (status !== "ALL" && item.filterStatus !== status) return false;
+                return !query || normalizeLookupText(item.searchText).includes(query);
+            });
+            document.getElementById("assignmentLookupCount").textContent = `${rows.length} kết quả`;
+            const results = document.getElementById("assignmentLookupResults"); results.replaceChildren();
+            if (!rows.length) { line(results, myAssignmentLookupItems.length ? "Không tìm thấy phân công khớp điều kiện tìm kiếm." : "Tài khoản này chưa có nhiệm vụ hoặc lịch báo cáo viên được phân công.", "text-muted"); return; }
+            rows.slice(0, 50).forEach(item => {
+                const card = document.createElement("article"); card.className = "border rounded p-3 mb-2 d-flex flex-column flex-md-row justify-content-between gap-2 align-items-md-center";
+                const details = document.createElement("div");
+                line(details, item.title, "fw-semibold");
+                line(details, `${item.code} · ${item.kindLabel} · ${item.statusLabel}`, "small text-muted");
+                line(details, `${item.dateLabel}: ${dateTime(item.date)} · ${item.organization || "Chưa rõ đơn vị"}`, "small");
+                const button = document.createElement("button"); button.type = "button"; button.className = "btn btn-sm btn-outline-primary flex-shrink-0"; button.textContent = "Xem trong danh sách";
+                button.addEventListener("click", () => { const target = document.getElementById(item.anchor); if (target) { target.scrollIntoView({ behavior: "smooth", block: "center" }); target.classList.add("border-primary", "shadow"); window.setTimeout(() => target.classList.remove("border-primary", "shadow"), 2200); } });
+                card.append(details, button); results.appendChild(card);
+            });
+            if (rows.length > 50) line(results, `Hiển thị 50/${rows.length} kết quả đầu. Hãy nhập thêm từ khóa để thu hẹp danh sách.`, "small text-muted");
+        }
+        ["assignmentLookupQuery", "assignmentLookupType", "assignmentLookupStatus"].forEach(id => document.getElementById(id).addEventListener(id.endsWith("Query") ? "input" : "change", renderAssignmentLookup));
         function readStaffNotificationIds() { return window.TGPLNotificationReadState?.read("staff", currentUser) || new Set(); }
         function saveStaffNotificationId(id) { window.TGPLNotificationReadState?.mark("staff", currentUser, id); }
         function renderStaffNotifications(tasks, speakers, legalAidRequests = []) {
@@ -451,8 +490,15 @@
             const message = document.getElementById("message"); message.hidden = true;
             try {
                 const result = await getMyAssignments();
-                const tasks = result.data?.tasks || [];
-                const speakers = result.data?.speakers || [];
+                const userId = String(currentUser?.id || "");
+                const tasks = (result.data?.tasks || []).filter(item => currentUser?.role === "TASK_ASSIGNEE" && String(item.assignee_user_id) === userId);
+                const speakers = (result.data?.speakers || []).filter(item => currentUser?.role === "SPEAKER" && String(item.speaker_user_id) === userId);
+                const taskStatusLabels = { ASSIGNED: "Đã giao", IN_PROGRESS: "Đang thực hiện", COMPLETED: "Hoàn thành", CANCELLED: "Đã hủy" };
+                myAssignmentLookupItems = [
+                    ...tasks.map(item => ({ kind: "TASK", kindLabel: "Nhiệm vụ cán bộ", title: item.title || "Nhiệm vụ", code: item.conference_code || "Chưa có mã hội nghị", statusLabel: taskStatusLabels[item.status] || item.status, filterStatus: item.status, dateLabel: "Hạn nhiệm vụ", date: item.due_at, organization: item.organization_name, anchor: `TASK-${item.id}`, searchText: [item.conference_code, item.conference_title, item.title, item.description, item.status, taskStatusLabels[item.status], item.organization_name, item.location_name].join(" ") })),
+                    ...speakers.map(item => ({ kind: "SPEAKER", kindLabel: "Lịch báo cáo viên", title: item.presentation_title || item.conference_title || "Lịch báo cáo viên", code: item.conference_code || "Chưa có mã hội nghị", statusLabel: "Lịch báo cáo viên", filterStatus: new Date(item.start_time).getTime() >= Date.now() ? "UPCOMING" : "PAST", dateLabel: "Thời gian hội nghị", date: item.start_time, organization: item.organization_name, anchor: `SPEAKER-${item.id}`, searchText: [item.conference_code, item.conference_title, item.presentation_title, item.notes, item.organization_name, item.location_name, item.start_time].join(" ") }))
+                ];
+                renderAssignmentLookup();
                 const contactSection = document.getElementById("legalAidContactSection");
                 const contactList = document.getElementById("legalAidContactList");
                 const contactCount = document.getElementById("legalAidContactCount");
@@ -541,7 +587,9 @@
                     line(card, `Người nhận: ${task.assignee_name}${task.assignee_organization ? ` · ${task.assignee_organization}` : ""}`, "small");
                     if (task.description) line(card, task.description, "mt-2");
                     const status = { ASSIGNED: "Đã giao", IN_PROGRESS: "Đang thực hiện", COMPLETED: "Hoàn thành", CANCELLED: "Đã hủy" };
-                    const statusLine = line(card, `Trạng thái: ${status[task.status] || task.status}${task.due_at ? ` · Hạn: ${dateTime(task.due_at)}` : ""}${task.completed_at ? ` · Hoàn thành lúc: ${dateTime(task.completed_at)}` : ""}`, "small mt-2");
+                    line(card, `Hạn hoàn thành: ${task.due_at ? dateTime(task.due_at) : "Chưa đặt"}`, "small fw-semibold mt-2");
+                    line(card, `Trạng thái: ${status[task.status] || task.status}`, "small");
+                    line(card, `Thời điểm hoàn thành thực tế: ${task.completed_at ? dateTime(task.completed_at) : task.status === "COMPLETED" ? "Chưa ghi nhận" : "Chưa hoàn thành"}`, "small text-muted");
                     if (currentUser?.role === "TASK_ASSIGNEE" && String(task.assignee_user_id) === String(currentUser.id) && task.status !== "CANCELLED" && task.status !== "COMPLETED") {
                         const hasPendingChange = requests.some(request => request.request_type === "TASK" && String(request.task_assignment_id) === String(task.id) && request.status === "PENDING");
                         const controls = document.createElement("div"); controls.className = "mt-2 d-flex gap-2";
