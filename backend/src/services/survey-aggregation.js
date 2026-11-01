@@ -35,4 +35,33 @@ function formatSurveyRatings(stats = {}, periodLabel) {
     return `Kết quả đánh giá khảo sát${periodLabel ? ` trong ${periodLabel}` : ""}: chất lượng tổ chức ${quality}; phối hợp giữa cơ quan ${coordination}.${sampleNote}`;
 }
 
-module.exports = { formatRankedSurveyTopics, formatSurveyRatings };
+function formatTopSurveyAreas(rows = []) {
+    if (!rows.length) return "Các phiếu khảo sát trong phạm vi dữ liệu được phép chưa ghi nhận địa bàn được đề xuất.";
+    const max = Math.max(...rows.map(row => Number(row.responses) || 0));
+    const tied = rows.filter(row => (Number(row.responses) || 0) === max).slice(0, 5);
+    const names = tied.map(row => `“${String(row.label || "").trim()}”`).join(", ");
+    if (tied.length > 1) return `Các địa bàn đồng hạng cao nhất trong phiếu khảo sát là ${names}, mỗi địa bàn có ${max} phiếu. Chưa có địa bàn nào được đề xuất nhiều hơn.`;
+    return `Địa bàn được đề xuất nhiều nhất là ${names} với ${max} phiếu.`;
+}
+
+function surveyOrganizationTerm(normalizedQuestion) {
+    const match = String(normalizedQuestion || "").match(/(?:phuong|xa|don vi)\s+(.+?)(?=\s+(?:trong|tren|duoc|da|ma|nay|va)\b|[,.!?]|$)/i);
+    const term = match?.[1]?.trim().slice(0, 120) || "";
+    // First-person organization references describe the authenticated user's
+    // scope; words following "tôi" are predicates, not an organization name.
+    if (/(?:^|\s)(?:toi|minh|chung toi)\b/i.test(term)) return "";
+    return /^(?:don vi toi|don vi minh)$/i.test(term) ? "" : term;
+}
+
+function appendSurveyPeriodFilters(filters, params, period, dateExpression) {
+    if (period?.from) {
+        params.push(period.from);
+        filters.push(`${dateExpression} >= $${params.length}::date`);
+    }
+    if (period?.to) {
+        params.push(period.to);
+        filters.push(`${dateExpression} < $${params.length}::date`);
+    }
+}
+
+module.exports = { formatRankedSurveyTopics, formatSurveyRatings, formatTopSurveyAreas, surveyOrganizationTerm, appendSurveyPeriodFilters };

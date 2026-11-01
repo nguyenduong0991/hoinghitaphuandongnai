@@ -97,10 +97,11 @@ function classifyQuestion(question) {
     const hasSurveySignal = ["phieu khao sat", "khao sat", "nguoi tra loi", "nguoi tham gia", "survey"].some(marker => normalized.includes(marker)) ||
         (/(?:chat luong|phoi hop|danh gia diem|diem trung binh)/.test(normalized) && /(?:hoi nghi|nguoi tham du|nguoi tham gia)/.test(normalized));
     const isSurveyRatingQuestion = hasSurveySignal && /(?:chat luong|phoi hop|danh gia diem|diem trung binh)/.test(normalized);
-    const isSurveyRankingQuestion = hasSurveySignal && (/(?:dia ban|chu de|noi dung).{0,70}(?:nhieu nhat|cao nhat|quan tam|duoc de xuat|duoc nhac nhieu)/.test(normalized) || /(?:nguoi tra loi|nguoi tham gia).{0,50}(?:quan tam|lua chon).{0,30}(?:chu de|noi dung)/.test(normalized) || /(?:chu de|noi dung).{0,80}(?:duoc )?(?:nguoi tra loi |nguoi tham gia )?(?:quan tam|lua chon|nhac nhieu|de xuat)/.test(normalized) || /(?:xep hang|top\s*\d*|so sanh so luot).{0,80}(?:chu de|noi dung|dia ban)/.test(normalized));
+    const isSurveyPlanningAdviceQuestion = /khao sat.{0,100}(?:co nen|nen dua|dua vao|can dua).{0,50}(?:ke hoach|chu de)|(?:co nen|nen dua|dua vao|can dua).{0,50}(?:chu de|noi dung).{0,60}khao sat/.test(normalized) ||
+        /(?:tu so lieu|du lieu|ket qua).{0,100}(?:khao sat|nhu cau).{0,100}(?:goi y|de xuat|lua chon).{0,80}(?:chu de|noi dung)|(?:goi y|de xuat|lua chon).{0,80}(?:chu de|noi dung).{0,100}(?:khao sat|nhu cau)/.test(normalized);
+    const isSurveyRankingQuestion = hasSurveySignal && !isSurveyPlanningAdviceQuestion && (/(?:dia ban|chu de|noi dung).{0,70}(?:nhieu nhat|cao nhat|quan tam|duoc de xuat|duoc nhac nhieu)/.test(normalized) || /(?:nguoi tra loi|nguoi tham gia).{0,50}(?:quan tam|lua chon).{0,30}(?:chu de|noi dung)/.test(normalized) || /(?:chu de|noi dung).{0,80}(?:duoc )?(?:nguoi tra loi |nguoi tham gia )?(?:quan tam|lua chon|nhac nhieu|de xuat)/.test(normalized) || /(?:xep hang|top\s*\d*|so sanh so luot).{0,80}(?:chu de|noi dung|dia ban)/.test(normalized));
     const isSurveyAudienceQuestion = /(?:doi tuong|nhom doi tuong).{0,60}(?:tham du|tham gia|duoc de xuat|khao sat)|(?:tham du|tham gia).{0,50}(?:nhom doi tuong|doi tuong duoc de xuat)/.test(normalized);
     const isSurveyIssueQuestion = /(?:vuong mac|kho khan|cau hoi).{0,80}(?:phap ly|phap luat|duoc neu|khao sat|nhieu|pho bien)|(?:phap ly|phap luat).{0,70}(?:vuong mac|kho khan|duoc neu)/.test(normalized);
-    const isSurveyPlanningAdviceQuestion = /khao sat.{0,100}(?:co nen|nen dua|dua vao|can dua).{0,50}(?:ke hoach|chu de)|(?:co nen|nen dua|dua vao|can dua).{0,50}(?:chu de|noi dung).{0,60}khao sat/.test(normalized);
     const isSurveyQuestion = ["phieu khao sat", "khao sat", "ket qua khao sat", "du lieu khao sat", "bao cao khao sat", "tong hop khao sat", "y kien sau hoi nghi", "danh gia sau hoi nghi", "survey", "nguoi tra loi quan tam"].some(marker => normalized.includes(marker)) || isSurveyRankingQuestion || isSurveyAudienceQuestion || isSurveyIssueQuestion || (hasSurveySignal && /hoi nghi|su kien/.test(normalized));
     const attendanceAggregate = /(?:(?:so luong|so luot|tong so|bao nhieu|tong hop|thong ke|dem|gop).{0,90}(?:nguoi|luot).{0,90}(?:dang ky|ghi ten|diem danh|tham du|co mat|thuc te)|(?:dang ky|ghi ten|diem danh|tham du|co mat|thuc te).{0,90}(?:nguoi|luot).{0,90}(?:so luong|so luot|tong so|bao nhieu|tong hop|thong ke|dem|gop)|(?:so luot|luot).{0,40}(?:dang ky|ghi ten).{0,50}(?:diem danh|co mat|tham du))/.test(normalized);
     const attendanceScope = mentionsConference || /\b(?:hn|hcn|conf)[-_ ]?\d{2,}\b/i.test(String(question || "")) || /\b(?:thang\s+(?:0?[1-9]|1[0-2])|nam\s+20\d{2}|quy\s+(?:[1-4]|i{1,3}|iv)|hom nay|tuan nay|tuan toi)\b/.test(normalized);
@@ -110,7 +111,9 @@ function classifyQuestion(question) {
     // A negated verb (e.g. "không liệt kê hội nghị") is not a request for raw rows.
     const positiveLookupText = normalized.replace(/\b(?:khong|dung)\s+(?:can\s+)?(?:liet ke|tim|chon|xem|mo|doc|hien thi)\b/g, " ");
     const isSurveyLookupQuestion = isSurveyQuestion &&
-        (["tim ", "chon ", "liet ke", "xem ", "mo ", "doc ", "hien thi", "cua phuong", "cua xa", "cua don vi"].some(marker => positiveLookupText.includes(marker)));
+        !isSurveyRankingQuestion && !isSurveyAudienceQuestion && !isSurveyIssueQuestion &&
+        !isSurveyRatingQuestion && !isSurveyPlanningAdviceQuestion &&
+        (["tim ", "chon ", "liet ke", "xem ", "mo ", "doc ", "hien thi"].some(marker => positiveLookupText.includes(marker)));
     // Survey data is a core feature: natural, short requests mentioning a survey
     // should use website data even when they do not say "summarize" explicitly.
     const isSurveySummaryQuestion = isSurveyQuestion;
@@ -126,7 +129,7 @@ function classifyQuestion(question) {
         /(?:don vi|dia ban|xa phuong).{0,45}(?:nhieu hoi nghi).{0,30}(?:hoan thanh|hoan tat).{0,20}(?:nhat|cao nhat)?/.test(normalized);
     const reportActions = ["tong hop", "bao cao", "thong ke", "so lieu", "bieu do", "phan tich", "ket qua", "xep hang", "so sanh", "du bao", "xu huong", "nhieu nhat", "it nhat", "cao nhat", "thap nhat", "noi bat", "tang giam", "thuong xuyen", "bao nhieu", "don vi nao", "dia ban nao", "chu de nao", "noi dung nao", "tien do nao"];
     const asksForReport = reportActions.some(marker => normalized.includes(marker));
-    const isSurveyAnalysisQuestion = isSurveyQuestion && (asksForReport || isSurveyConferenceEvaluation) && !isSurveyLookupQuestion;
+    const isSurveyAnalysisQuestion = isSurveyQuestion && (asksForReport || isSurveyConferenceEvaluation) && !isSurveyLookupQuestion && !isSurveyPlanningAdviceQuestion;
     const mentionsReportPeriod = /\bthang\s+(?:0?[1-9]|1[0-2])(?:\s*(?:nam|[/.-])\s*\d{4})?\b/.test(normalized) ||
         /\bnam\s+\d{4}\b/.test(normalized) ||
         /\btu\s+(?:nam|thang|ngay)\b.{0,45}\bden\b/.test(normalized) ||

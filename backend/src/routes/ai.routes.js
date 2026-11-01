@@ -13,7 +13,7 @@ const {
 const { normalizeConversationHistory, resolveConversationContext, buildConversationMemory } = require("../services/conversation-memory");
 const { requestedConferenceFields, formatConferenceDetails, formatConferenceStatusList } = require("../services/conference-answer");
 const { findVerifiedLegalArticle, answerFromExactLegalArticle, isLegalAidRequiredDocumentsQuestion, hasCompleteAnswerEnding } = require("../services/legal-answer");
-const { formatRankedSurveyTopics, formatSurveyRatings } = require("../services/survey-aggregation");
+const { formatRankedSurveyTopics, formatSurveyRatings, formatTopSurveyAreas, surveyOrganizationTerm, appendSurveyPeriodFilters } = require("../services/survey-aggregation");
 const { formatAccountTaskCount, formatAccountTaskStatusCount, formatAccountTaskRatings } = require("../services/task-account-summary");
 const { isPendingConferenceRequestCountQuestion, formatPendingConferenceRequestCount } = require("../services/pending-conference-requests");
 const { isPendingConferenceOverlapCountQuestion } = require("../services/pending-conference-overlaps");
@@ -1412,8 +1412,7 @@ async function loadSurveyRows(user, question) {
         return "Tài khoản chưa được gắn với đơn vị nên chưa thể xác định phiếu khảo sát. Vui lòng liên hệ admin.";
     }
     const normalizedQuestion = normalize(question);
-    const orgMatch = normalizedQuestion.match(/(?:phuong|xa|don vi)\s+(.+?)(?=\s+(?:trong|tren|duoc|da|ma|nay|va)\b|[,.!?]|$)/i);
-    const organizationTerm = orgMatch?.[1]?.trim().slice(0, 120) || "";
+    const organizationTerm = surveyOrganizationTerm(normalizedQuestion);
     const organizations = user.role === "COMMUNE"
         ? await pool.query("SELECT id,name FROM organizations WHERE id=$1", [user.organization_id])
         : await pool.query("SELECT id,name FROM organizations");
@@ -1529,11 +1528,21 @@ async function loadSurveySummary(user, question) {
         return `Chưa có phiếu khảo sát${period} trong phạm vi dữ liệu tài khoản được phép xem.`;
     }
     const normalizedQuestion = normalize(question);
+    const asksSurveyTopicRecommendation = /(?:tu so lieu|du lieu|ket qua).{0,100}(?:khao sat|nhu cau).{0,100}(?:goi y|de xuat|lua chon).{0,80}(?:chu de|noi dung)|(?:goi y|de xuat|lua chon).{0,80}(?:chu de|noi dung).{0,100}(?:khao sat|nhu cau)/.test(normalizedQuestion);
     const asksTopSuggestedArea = /dia ban/.test(normalizedQuestion) && /(nhieu nhat|cao nhat|duoc de xuat|uu tien)/.test(normalizedQuestion);
-    const asksTopSurveyTopic = /(?:chu de|noi dung)/.test(normalizedQuestion) && /(?:quan tam|nhieu nhat|cao nhat|duoc nhac|duoc de xuat|xep hang|top\s*\d*|so sanh so luot)/.test(normalizedQuestion);
+    const asksTopSurveyTopic = !asksSurveyTopicRecommendation && /(?:chu de|noi dung)/.test(normalizedQuestion) && /(?:quan tam|nhieu nhat|cao nhat|duoc nhac|duoc de xuat|xep hang|top\s*\d*|so sanh so luot)/.test(normalizedQuestion);
     const asksSurveyRating = /(?:chat luong|phoi hop|danh gia diem|diem trung binh)/.test(normalizedQuestion) && /(?:danh gia|diem|chat luong|phoi hop)/.test(normalizedQuestion);
     const asksSurveyAudience = /(?:doi tuong|nhom doi tuong)/.test(normalizedQuestion) && /(?:tham du|tham gia|de xuat|khao sat)/.test(normalizedQuestion);
     const asksSurveyIssues = /(?:vuong mac|kho khan|cau hoi)/.test(normalizedQuestion) && /(?:phap ly|phap luat|duoc neu|nhieu|pho bien|khao sat)/.test(normalizedQuestion);
+    if (asksSurveyTopicRecommendation) {
+        if (!topicsResult.rows.length) return `Chưa có chủ đề khảo sát đủ rõ trong ${requestedPeriod?.label || "phạm vi dữ liệu được phép xem"} để gợi ý. Vui lòng kiểm tra lại kỳ hoặc bổ sung phiếu khảo sát.`;
+        const firstRank = Number(topicsResult.rows[0].position) || 1;
+        const candidates = topicsResult.rows.filter(row => Number(row.position) === firstRank).slice(0, 5);
+        const topicText = candidates.map(row => `“${String(row.label).trim()}” (${row.responses} phiếu)`).join("; ");
+        const areaText = areasResult.rows[0] ? ` Địa bàn được nhắc nhiều nhất: “${String(areasResult.rows[0].label).trim()}” (${areasResult.rows[0].responses} phiếu).` : "";
+        const sampleNote = total < 5 ? ` Chỉ có ${total} phiếu trong kỳ; đây là gợi ý mô tả, chưa đại diện cho toàn bộ nhu cầu.` : " Tần suất khảo sát là tín hiệu tham khảo, không tự khẳng định nhu cầu của toàn địa bàn.";
+        return `Gợi ý từ ${total} phiếu khảo sát${requestedPeriod ? ` trong ${requestedPeriod.label}` : ""}: cân nhắc chủ đề ${topicText}${candidates.length > 1 ? " (đồng hạng cao nhất)" : ""}.${areaText}${sampleNote}`;
+    }
     if (asksSurveyIssues) {
         if (!issuesResult.rows.length) return "Phiếu khảo sát trong phạm vi tài khoản chưa ghi nhận vướng mắc pháp lý hoặc câu hỏi cần giải đáp.";
         const highestCount = Math.max(...issuesResult.rows.map(row => Number(row.responses) || 0));
@@ -1553,14 +1562,7 @@ async function loadSurveySummary(user, question) {
         return formatSurveyRatings(stats, requestedPeriod?.label);
     }
     if (asksTopSuggestedArea) {
-        if (!areasResult.rows.length) return "Các phiếu khảo sát trong phạm vi tài khoản chưa ghi nhận địa bàn được đề xuất.";
-        const highestCount = Math.max(...areasResult.rows.map(row => Number(row.responses) || 0));
-        const tiedAreas = areasResult.rows.filter(row => Number(row.responses) === highestCount).slice(0, 5);
-        const names = tiedAreas.map(row => `“${String(row.label).trim()}”`).join(", ");
-        if (tiedAreas.length > 1) {
-            return `Các địa bàn đồng hạng cao nhất trong phiếu khảo sát là ${names}, mỗi địa bàn có ${highestCount} phiếu. Chưa có địa bàn nào được đề xuất nhiều hơn.`;
-        }
-        return `Địa bàn được đề xuất nhiều nhất là ${names} với ${highestCount} phiếu.`;
+        return formatTopSurveyAreas(areasResult.rows);
     }
     const list = (rows, formatter) => rows.length ? rows.map(formatter).join("; ") : "chưa có dữ liệu";
     const quality = stats.quality_average == null ? "chưa có đánh giá" : `${stats.quality_average}/5 (${stats.quality_count} phiếu)`;
@@ -1637,21 +1639,27 @@ async function loadSurveyConferenceComparison(user, question) {
         return "Tài khoản chưa được gắn với đơn vị nên chưa xác định được phạm vi khảo sát. Vui lòng liên hệ admin.";
     }
 
-    const surveyParams = [period.from, period.to];
-    const surveyOrgFilter = user.role === "COMMUNE" ? "AND s.organization_id=$3::uuid" : "";
-    if (user.role === "COMMUNE") surveyParams.push(user.organization_id);
+    const surveyParams = [];
+    const surveyFilters = [];
+    appendSurveyPeriodFilters(surveyFilters, surveyParams, period, "s.created_at");
+    if (user.role === "COMMUNE") {
+        surveyParams.push(user.organization_id);
+        surveyFilters.push(`s.organization_id=$${surveyParams.length}::uuid`);
+    }
+    const surveyWhere = surveyFilters.length ? surveyFilters.join(" AND ") : "TRUE";
+
+    const conferenceParams = [user.role, user.organization_id || null];
+    const conferenceFilters = ["($1::text='ADMIN' OR ($1::text='COMMUNE' AND c.organization_id=$2::uuid))", "c.status='COMPLETED'"];
+    appendSurveyPeriodFilters(conferenceFilters, conferenceParams, period, "(c.start_time AT TIME ZONE 'Asia/Ho_Chi_Minh')::date");
     const [surveyResult, conferenceResult] = await Promise.all([
         pool.query(`SELECT s.suggested_area,s.topics,s.training_need
             FROM conference_need_surveys s
-            WHERE s.created_at >= $1::date AND s.created_at < $2::date ${surveyOrgFilter}
+            WHERE ${surveyWhere}
             ORDER BY s.created_at DESC`, surveyParams),
         pool.query(`SELECT c.code,c.title,c.description,c.location_name,c.location_address,o.name AS organization_name
             FROM conferences c JOIN organizations o ON o.id=c.organization_id
-            WHERE ($1::text='ADMIN' OR ($1::text='COMMUNE' AND c.organization_id=$2::uuid))
-            AND c.status='COMPLETED'
-            AND (c.start_time AT TIME ZONE 'Asia/Ho_Chi_Minh')::date >= $3::date
-            AND (c.start_time AT TIME ZONE 'Asia/Ho_Chi_Minh')::date < $4::date
-            ORDER BY c.start_time,c.code LIMIT 100`, [user.role,user.organization_id || null,period.from,period.to])
+            WHERE ${conferenceFilters.join(" AND ")}
+            ORDER BY c.start_time,c.code LIMIT 100`, conferenceParams)
     ]);
     if (!surveyResult.rows.length) return `Không có phiếu khảo sát trong kỳ ${period.label} để đối chiếu.`;
 
@@ -1985,13 +1993,13 @@ async function prepareChat(req) {
         (classification.isConferenceAnalysisQuestion && !classification.isConferenceOrganizationSummaryQuestion && !/\b(?:hn|hcn|conf)[\s_-]*\d{2,}\b/i.test(normalizedReportQuestion) && !(classification.isTaskQuery && /\b(?:hn|hcn|conf)[\s_-]*\d{2,}\b/i.test(normalizedReportQuestion))) ||
         classification.isSurveySummaryQuestion || classification.isConferenceAttendanceQuestion || asksTaskTimeScopedReport;
     const requestedReportPeriod = parseReportPeriod(reportQuestion);
-    if (classification.isSurveyPlanningAdviceQuestion) {
+    if (classification.isSurveyPlanningAdviceQuestion && !requestedReportPeriod) {
         return {
             question,
             mode: "fast",
-            rag: { used: false, topK: 0, database: false, method: "survey_topic_planning_guidance", semantic: false, complexity: "simple" },
+            rag: { used: false, topK: 0, database: false, method: "clarify_survey_recommendation_period", semantic: false, complexity: "simple" },
             sources: [],
-            directAnswer: "Có thể cân nhắc chủ đề đó cho kế hoạch của đơn vị bạn như một tín hiệu khảo sát. Trước khi chốt, hãy đối chiếu số phiếu, kỳ khảo sát và mức độ phù hợp với đối tượng; nếu chỉ có ít ý kiến thì nên hỏi thêm hoặc tổ chức quy mô phù hợp, chưa xem đó là nhu cầu chung. Chatbot không tự thêm chủ đề vào kho RAG. Nếu bạn nêu chủ đề cụ thể và kỳ khảo sát, tôi có thể rà số liệu trong phạm vi tài khoản.",
+            directAnswer: "Bạn muốn dùng phiếu khảo sát trong khoảng thời gian nào để gợi ý chủ đề? Hãy cho biết tháng/năm, quý/năm, khoảng ngày hoặc chọn toàn bộ thời gian.",
             messages: []
         };
     }
@@ -2560,7 +2568,7 @@ async function prepareChat(req) {
             }
         }
         const isSimpleSurveySummary = /tong hop.*phieu khao sat/.test(normalizedQuestion) && !/(phan tich|danh gia|xu huong|so sanh|du bao|uu tien)/.test(normalizedQuestion);
-        if (!classification.isSurveyConferenceEvaluation && (classification.isSurveyRankingQuestion || classification.isSurveyRatingQuestion || classification.isSurveyAudienceQuestion || classification.isSurveyIssueQuestion || isSimpleSurveySummary)) {
+        if (!classification.isSurveyConferenceEvaluation && (classification.isSurveyRankingQuestion || classification.isSurveyRatingQuestion || classification.isSurveyAudienceQuestion || classification.isSurveyIssueQuestion || classification.isSurveyPlanningAdviceQuestion || isSimpleSurveySummary)) {
             return {
                 question,
                 mode: "fast",

@@ -71,26 +71,23 @@
                     ["XP-01", "Các hội nghị nào đơn vị tôi đã gửi đăng ký trong tháng này?"],
                     ["XP-02", "Hồ sơ hội nghị của đơn vị tôi đang chờ duyệt gồm những mã nào?"],
                     ["XP-03", "Hội nghị HN-0012 diễn ra ngày nào, ở đâu và hiện có trạng thái gì?"],
-                    ["XP-04", "Hội nghị nào đơn vị tôi được mời tham dự trong tháng tới? Nêu ngày và địa điểm."],
-                    ["XP-05", "Tôi cần làm gì để đăng ký đơn vị tham dự hội nghị đã được công khai hoặc được mời?"],
-                    ["XP-06", "Đơn vị tôi có thể đăng ký tham dự hội nghị này không? Nếu thiếu thông tin, hãy hỏi lại mã hội nghị."]
+                    ["XP-04", "Hội nghị nào đơn vị tôi được mời tham dự trong tháng tới? Nêu ngày và địa điểm."]
                 ]},
                 { title: "Khảo sát và nhu cầu của địa bàn", hint: "Tổng hợp theo kỳ được yêu cầu; khi chưa có mốc thời gian, hãy hỏi lại.", items: [
-                    ["XP-07", "Tổng hợp các phiếu khảo sát đơn vị tôi đã gửi trong năm 2026."],
-                    ["XP-08", "Những chủ đề pháp luật nào được người trả lời khảo sát của đơn vị tôi quan tâm? Nêu số lượt và đồng hạng."],
-                    ["XP-09", "Các nhóm đối tượng tham dự được đề xuất trong phiếu khảo sát của đơn vị tôi là gì?"],
-                    ["XP-10", "Người dân nêu vướng mắc pháp lý nào trong khảo sát? Chỉ tổng hợp nội dung, không kết luận vụ việc."],
-                    ["XP-11", "Xếp hạng các chủ đề được quan tâm trong phiếu khảo sát của đơn vị tôi theo số lượt; nêu số liệu và các trường hợp đồng hạng."],
-                    ["XP-12", "Địa bàn nào trong khảo sát của đơn vị tôi có số đề xuất cao nhất? Nếu các địa bàn bằng nhau, hãy liệt kê đồng hạng, không chọn một địa bàn thắng."],
-                    ["XP-13", "Đánh giá mức độ thống nhất giữa chủ đề hội nghị đã đề xuất và nhu cầu trong phiếu khảo sát; nêu rõ dữ liệu còn thiếu."],
-                    ["XP-14", "Từ số liệu khảo sát trong kỳ, hãy gợi ý một chủ đề hội nghị phù hợp cho địa bàn; phân biệt số liệu với đề xuất."]
+                    ["XP-05", "Tổng hợp các phiếu khảo sát đơn vị tôi đã gửi trong năm 2026."],
+                    ["XP-06", "Những chủ đề pháp luật nào được người trả lời khảo sát của đơn vị tôi quan tâm? Nêu số lượt và đồng hạng."],
+                    ["XP-07", "Các nhóm đối tượng tham dự được đề xuất trong phiếu khảo sát của đơn vị tôi là gì?"],
+                    ["XP-08", "Người dân nêu vướng mắc pháp lý nào trong khảo sát? Chỉ tổng hợp nội dung, không kết luận vụ việc."],
+                    ["XP-09", "Địa bàn nào trong khảo sát của đơn vị tôi có số đề xuất cao nhất? Nếu các địa bàn bằng nhau, hãy liệt kê đồng hạng, không chọn một địa bàn thắng."],
+                    ["XP-10", "Đánh giá mức độ thống nhất giữa chủ đề hội nghị đã đề xuất và nhu cầu trong phiếu khảo sát; nêu rõ dữ liệu còn thiếu."],
+                    ["XP-11", "Từ số liệu khảo sát trong kỳ, hãy gợi ý một chủ đề hội nghị phù hợp cho địa bàn; phân biệt số liệu với đề xuất."]
                 ]},
                 { title: "Đề xuất tổ chức và thủ tục TGPL", hint: "AI chỉ lập gợi ý; chưa lưu hồ sơ hoặc gửi phân công nếu chưa được người dùng xác nhận.", items: [
-                    ["XP-15", "Gợi ý kế hoạch tuyên truyền Luật Trợ giúp pháp lý tại đơn vị tôi: đối tượng, quy mô, nội dung và tài liệu."],
-                    ["XP-16", "Cần cung cấp thông tin gì khi đề xuất tổ chức hội nghị trên hệ thống?"],
-                    ["XP-17", "Người yêu cầu trợ giúp pháp lý cần chuẩn bị giấy tờ gì theo Luật Trợ giúp pháp lý?"],
-                    ["XP-18", "Nếu câu hỏi của người dân vượt ngoài căn cứ trong Luật Trợ giúp pháp lý, tôi hướng dẫn liên hệ thế nào?"],
-                    ["XP-19", "Hãy tổng hợp các yêu cầu tư vấn do người dân gửi đến đơn vị tôi trong tháng này; nếu chưa xác định được tháng, hãy hỏi lại."]
+                    ["XP-12", "Gợi ý kế hoạch tuyên truyền Luật Trợ giúp pháp lý tại đơn vị tôi: đối tượng, quy mô, nội dung và tài liệu."],
+                    ["XP-13", "Cần cung cấp thông tin gì khi đề xuất tổ chức hội nghị trên hệ thống?"],
+                    ["XP-14", "Người yêu cầu trợ giúp pháp lý cần chuẩn bị giấy tờ gì theo Luật Trợ giúp pháp lý?"],
+                    ["XP-15", "Nếu câu hỏi của người dân vượt ngoài căn cứ trong Luật Trợ giúp pháp lý, tôi hướng dẫn liên hệ thế nào?"],
+                    ["XP-16", "Hãy tổng hợp các yêu cầu tư vấn do người dân gửi đến đơn vị tôi trong tháng này; nếu chưa xác định được tháng, hãy hỏi lại."]
                 ]}
             ],
 
